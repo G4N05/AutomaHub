@@ -27,7 +27,7 @@ local MENU_URL = REPO .. "AutomaHubMenu/menu_ui.lua"
 -- =========================
 -- Per-map routing: PlaceId -> URL loader luaegis (1 script luaegis per map)
 local MAP_LOADERS = {
-    [93978595733734] = "https://luaegis.net/scripts/v4/loaders/de7b144b-8eab-4ee2-853c-09a339415493.lua",
+    [93978595733734] = "https://luaegis.net/scripts/v4/loaders/c5415f48-f199-4ae5-ad15-a398710f53ee.lua",
 }
 -- =========================
 
