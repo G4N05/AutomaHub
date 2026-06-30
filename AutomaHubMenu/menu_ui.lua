@@ -123,6 +123,7 @@ function AutomaHub.addTab(cfg)
         fallback = cfg.fallback or string.sub(cfg.id, 1, 1):upper(),
         items = {},
     })
+    print("[AutomaHub] addTab: " .. cfg.id .. " | TABS count now: " .. #TABS .. " | AutomaHub.TABS count: " .. #(AutomaHub.TABS or {}))
     return AutomaHub
 end
 
@@ -145,6 +146,8 @@ end
 
 -- Expose API ke getgenv supaya map module bisa panggil
 if getgenv then getgenv().AutomaHub = AutomaHub end
+-- Juga simpan di _G sebagai fallback (beberapa executor getgenv() balikin table beda)
+if _G then _G.AutomaHub = AutomaHub end
 
 -- ============================================================
 -- BUILD GUI
@@ -1049,6 +1052,7 @@ function AutomaHub.setState(tabId, itemIdx, value)
 end
 
 if getgenv then getgenv().AutomaHub = AutomaHub end
+if _G then _G.AutomaHub = AutomaHub end
 
 -- ============================================================
 -- AVATAR + LOGO LOAD (async)

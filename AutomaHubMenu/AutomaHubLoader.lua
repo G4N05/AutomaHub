@@ -146,7 +146,8 @@ local function onGranted(key)
         -- kalo mapConfig adalah function (API mode), panggil sekarang
         -- (menu udah ke-build, API getgenv().AutomaHub udah ada)
         if getgenv and type(getgenv().AutomaHubMapFn) == "function" then
-            local api = getgenv().AutomaHub
+            -- coba ambas: getgenv() dan _G (beberapa executor getgenv() balikin table beda)
+            local api = (getgenv and getgenv().AutomaHub) or _G.AutomaHub
             if api then
                 local services = {
                     Players = game:GetService("Players"),
@@ -159,10 +160,13 @@ local function onGranted(key)
                     Workspace = game:GetService("Workspace"),
                     LocalPlayer = game:GetService("Players").LocalPlayer,
                 }
-                pcall(getgenv().AutomaHubMapFn, api, services)
+                -- JANGAN pcall — biar error keliatan di console!
+                getgenv().AutomaHubMapFn(api, services)
                 if type(api.rebuild) == "function" then
-                    pcall(api.rebuild)
+                    api.rebuild()
                 end
+            else
+                warn("[AutomaHub] ERROR: AutomaHub API table tidak ditemukan! getgenv=" .. tostring(getgenv and getgenv().AutomaHub) .. " _G=" .. tostring(_G.AutomaHub))
             end
             getgenv().AutomaHubMapFn = nil
         end
