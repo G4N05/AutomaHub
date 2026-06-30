@@ -717,37 +717,78 @@ return function(ctx)
         return best
     end
 
-    local veilTargetVel = nil
+    -- state Veil (di-update loop, dibaca hook)
+    local veilTargetPos, veilTargetVel, veilTargetName = nil, nil, nil
     local veilSampleName, veilSamplePos, veilSampleT = nil, nil, 0
+    local veilLockedPlayer = nil
+    local veilLockGraceUntil = 0
 
     local function veilGetFovCenter() if veilFovFollowMouse then local m = UserInputService:GetMouseLocation() return Vector2.new(m.X, m.Y) end local vp = Workspace.CurrentCamera.ViewportSize return Vector2.new(vp.X/2, vp.Y/2) end
     local function veilGetPart(plr) return plr and plr.Character and plr.Character:FindFirstChild(VEIL_TARGET_PART) end
 
+    -- cek target masih dalam jangkauan lempar (root>=0 = reachable)
+    local function veilInRange(origin, targetPos, speed, g)
+        local disp = targetPos - origin
+        local dy = disp.Y
+        local flatX, flatZ = disp.X, disp.Z
+        local dx = math.sqrt(flatX * flatX + flatZ * flatZ)
+        if dx < 0.001 then return true end
+        local v2 = speed * speed
+        local root = v2 * v2 - g * (g * dx * dx + 2 * dy * v2)
+        return root >= 0
+    end
+
     local function veilGetTarget()
         local team = Teams:FindFirstChild("Survivors") if not team then return nil end
-        local cam = Workspace.CurrentCamera local center = veilGetFovCenter()
+        local cam = Workspace.CurrentCamera local origin = cam.CFrame.Position local center = veilGetFovCenter()
         local best, bestDist = nil, veilFovRadius
         for _, plr in ipairs(team:GetPlayers()) do
             if plr ~= LocalPlayer then
                 local part = veilGetPart(plr)
                 if part then
                     local sp, onScreen = cam:WorldToViewportPoint(part.Position)
-                    if onScreen then local d = (Vector2.new(sp.X, sp.Y) - center).Magnitude if d <= bestDist then best, bestDist = plr, d end end
+                    if onScreen then
+                        local d = (Vector2.new(sp.X, sp.Y) - center).Magnitude
+                        if d <= bestDist and veilInRange(origin, part.Position, VEIL_AIM_LOCK_SPEED, VEIL_GRAVITY) then best, bestDist = plr, d end
+                    end
                 end
             end
         end
         return best
     end
 
-    local function veilComputeDir(part, targetVel)
-        local cam = Workspace.CurrentCamera local origin = cam.CFrame.Position local tp = part.Position local aimPoint = tp
-        if veilEnableLead and targetVel then
-            local tvel = targetVel * veilOffsetForDist((tp - origin).Magnitude)
-            local tof = (tp - origin).Magnitude / VEIL_AIM_LOCK_SPEED
-            for _ = 1, 2 do local predicted = tp + tvel * tof tof = (predicted - origin).Magnitude / VEIL_AIM_LOCK_SPEED end
-            aimPoint = tp + tvel * tof
+    -- ballistic arc solver (math murni -> aman dipanggil di hook)
+    local function veilSolveBallistic(origin, target, speed, g)
+        local disp = target - origin
+        local dy = disp.Y
+        local flatX, flatZ = disp.X, disp.Z
+        local dx = math.sqrt(flatX * flatX + flatZ * flatZ)
+        if dx < 0.001 then return (disp.Magnitude > 0) and disp.Unit or nil, 0 end
+        local v2 = speed * speed
+        local root = v2 * v2 - g * (g * dx * dx + 2 * dy * v2)
+        local tanTheta
+        if root < 0 then tanTheta = 1 else local sq = math.sqrt(root) tanTheta = (v2 - sq) / (g * dx) end
+        local horiz = Vector3.new(flatX / dx, 0, flatZ / dx)
+        local dir = (horiz + Vector3.new(0, tanTheta, 0))
+        if dir.Magnitude < 0.001 then return nil end
+        dir = dir.Unit
+        local cosTheta = math.sqrt(dir.X * dir.X + dir.Z * dir.Z)
+        local tof = (speed * cosTheta > 0.001) and (dx / (speed * cosTheta)) or 0
+        return dir, tof
+    end
+
+    local function veilSolveLead(origin, targetPos, targetVel, speed, g)
+        local pred = targetPos
+        local dist = (targetPos - origin).Magnitude
+        local applyLead = veilEnableLead and targetVel
+        local mult = applyLead and veilOffsetForDist(dist) or 0
+        local dir, tof
+        for _ = 1, 3 do
+            dir, tof = veilSolveBallistic(origin, pred, speed, g)
+            if not dir then return nil end
+            if applyLead then pred = targetPos + targetVel * (tof * mult) end
         end
-        local dir = (aimPoint - origin) if dir.Magnitude < 0.01 then return nil end return dir.Unit
+        return dir, tof
     end
 
     local veilFovCircle = nil
@@ -760,10 +801,29 @@ return function(ctx)
     local VEIL_RENDER_BIND = "AutomaHubVeilRender"
     pcall(function() RunService:UnbindFromRenderStep(VEIL_RENDER_BIND) end)
     RunService:BindToRenderStep(VEIL_RENDER_BIND, Enum.RenderPriority.Camera.Value + 1, function()
-        local cam = Workspace.CurrentCamera
-        if not veilEnabled then if veilFovCircle then veilFovCircle.Visible = false end return end
+        if not (veilEnabled or veilAimLock) then
+            veilTargetPos, veilTargetVel, veilTargetName = nil, nil, nil
+            veilSampleName = nil veilLockedPlayer = nil
+            if veilFovCircle then veilFovCircle.Visible = false end
+            return
+        end
         if veilFovCircle then veilFovCircle.Visible = veilShowFov veilFovCircle.Radius = veilFovRadius veilFovCircle.Position = veilGetFovCenter() end
-        local target = veilGetTarget()
+        -- HOLD klik kiri PAS DI STANCE LEMPAR (spearmode) -> kunci target POV; ga ganti sampe lepas.
+        local stanceChar = LocalPlayer.Character
+        local inThrowStance = stanceChar and stanceChar:GetAttribute("spearmode") == true
+        local holding = inThrowStance and UserInputService:IsMouseButtonPressed(Enum.UserInputType.MouseButton1)
+        local target
+        if holding then
+            if not veilLockedPlayer then veilLockedPlayer = veilGetTarget() end
+            if not (veilLockedPlayer and veilLockedPlayer.Parent and veilGetPart(veilLockedPlayer)) then veilLockedPlayer = veilGetTarget() end
+            target = veilLockedPlayer
+            veilLockGraceUntil = tick() + 0.3
+        elseif veilLockedPlayer and tick() < veilLockGraceUntil and veilLockedPlayer.Parent and veilGetPart(veilLockedPlayer) then
+            target = veilLockedPlayer
+        else
+            veilLockedPlayer = nil
+            target = veilGetTarget()
+        end
         if target then
             local part = veilGetPart(target)
             if part then
@@ -776,14 +836,32 @@ return function(ctx)
                         veilSamplePos = pos veilSampleT = now
                     end
                 else veilSampleName = target.Name veilSamplePos = pos veilSampleT = now veilTargetVel = Vector3.zero end
-                local dir = veilComputeDir(part, veilTargetVel)
+                veilTargetPos = pos veilTargetName = target.Name
                 if veilFovCircle then veilFovCircle.Color = Color3.fromRGB(255, 0, 0) end
-                if veilAimLock and dir and UserInputService:IsMouseButtonPressed(Enum.UserInputType.MouseButton1) then
-                    local cf = cam.CFrame local goal = CFrame.new(cf.Position, cf.Position + dir)
-                    cam.CFrame = cf:Lerp(goal, VEIL_AIM_SMOOTH)
+                -- AIM LOCK: arahin kamera ke ARAH LEMPAR (ballistic arc), bukan flat ke target
+                if veilAimLock and holding then
+                    local cam = Workspace.CurrentCamera local origin = cam.CFrame.Position
+                    local dir = veilSolveLead(origin, pos, veilTargetVel, VEIL_AIM_LOCK_SPEED, VEIL_GRAVITY)
+                    if dir then local goal = CFrame.new(origin, origin + dir) cam.CFrame = cam.CFrame:Lerp(goal, VEIL_AIM_SMOOTH) end
                 end
-            else if veilFovCircle then veilFovCircle.Color = Color3.fromRGB(255, 255, 255) end end
-        else if veilFovCircle then veilFovCircle.Color = Color3.fromRGB(255, 255, 255) end end
+            else veilTargetPos, veilTargetVel = nil, nil veilSampleName = nil end
+        else veilTargetPos, veilTargetVel = nil, nil veilSampleName = nil if veilFovCircle then veilFovCircle.Color = Color3.fromRGB(255, 255, 255) end end
+    end)
+
+    -- HOOK silent aim Veil: timpa arah Spearthrow pas FireServer
+    ctx.onNamecall(function(self, method, ...)
+        if method == "FireServer" and veilEnabled and veilTargetPos and self.Name == "Spearthrow" then
+            local p = self.Parent
+            if p and p.Name == "Veil" then
+                local args = { ... }
+                local dirArg, speedArg, originArg = args[1], args[2], args[3]
+                if typeof(dirArg) == "Vector3" and type(speedArg) == "number" and typeof(originArg) == "Vector3" then
+                    local newDir = veilSolveLead(originArg, veilTargetPos, veilTargetVel, speedArg, VEIL_GRAVITY)
+                    if newDir then args[1] = newDir return true, ctx.callOriginal(self, unpack(args)) end
+                end
+            end
+        end
+        return false
     end)
 
     if getgenv then
