@@ -1016,11 +1016,16 @@ _MENU_BUILT = true
 -- API: rebuild (kalo config ditambahin setelah menu di-build)
 -- ============================================================
 function AutomaHub.rebuild()
+    print("[AutomaHub] rebuild() called, TABS count:", #TABS)
+    for i, t in ipairs(TABS) do print("  tab", i, t.id, "items:", #t.items) end
     if #TABS > 0 then
         buildNav()
+        print("[AutomaHub] buildNav done")
         selectTab(TABS[1].id)
+        print("[AutomaHub] selectTab done")
     else
         showUnsupported()
+        print("[AutomaHub] showUnsupported (no tabs)")
     end
 end
 
