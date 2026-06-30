@@ -409,8 +409,10 @@ Scroll.Position = UDim2.fromOffset(0, 0)
 Scroll.Size = UDim2.fromScale(1, 1)
 Scroll.BackgroundTransparency = 1
 Scroll.BorderSizePixel = 0
-Scroll.ScrollBarThickness = 0
-Scroll.ScrollingEnabled = false
+Scroll.ScrollBarThickness = 4
+Scroll.ScrollBarImageColor3 = COL.border
+Scroll.ScrollBarImageTransparency = 0.3
+Scroll.ScrollingEnabled = true
 Scroll.AutomaticCanvasSize = Enum.AutomaticSize.Y
 Scroll.CanvasSize = UDim2.new(0, 0, 0, 0)
 Scroll.ZIndex = 1
@@ -872,10 +874,8 @@ local function selectTab(id)
         if n.letter then n.letter.TextColor3 = c end
     end
     populate(id)
-    Scroll.Position = UDim2.fromOffset(0, -22)
-    TweenService:Create(Scroll, TweenInfo.new(0.22, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
-        Position = UDim2.fromOffset(0, 0),
-    }):Play()
+    -- reset posisi scroll ke atas tanpa animasi
+    Scroll.CanvasPosition = Vector2.new(0, 0)
 end
 
 -- ============================================================
