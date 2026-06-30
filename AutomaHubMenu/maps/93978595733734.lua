@@ -480,11 +480,11 @@ return function(ctx)
         cleanupModel(model)
         if not espEnabled then return end
         local hl = Instance.new("Highlight")
-        hl.FillColor = defaultColor hl.OutlineColor = defaultColor hl.FillTransparency = 0.7 hl.OutlineTransparency = 0 hl.Parent = model
+        hl.FillColor = defaultColor hl.OutlineColor = defaultColor hl.FillTransparency = 0.6 hl.OutlineTransparency = 0 hl.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop hl.Parent = model
         local root = model:FindFirstChild("HumanoidRootPart") or model:FindFirstChild("Head")
         if root then
             local bill = Instance.new("BillboardGui")
-            bill.Name = "ESP_NameTag" bill.Size = UDim2.fromOffset(120, 30) bill.StudsOffset = Vector3.new(0, 2.5, 0) bill.AlwaysOnTop = true bill.Parent = root
+            bill.Name = "ESP_NameTag" bill.Size = UDim2.new(0, 200, 0, 45) bill.StudsOffset = Vector3.new(0, 2.5, 0) bill.AlwaysOnTop = true bill.LightInfluence = 0 bill.MaxDistance = 2000 bill.Adornee = root bill.Parent = root
             local container = Instance.new("Frame")
             container.Size = UDim2.new(1, 0, 1, 0) container.BackgroundTransparency = 1 container.Parent = bill
             local nameLabel = Instance.new("TextLabel")
