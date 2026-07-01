@@ -62,6 +62,37 @@ local function runSource(src, label)
 end
 
 -- ============================================================
+-- KEY PERSIST (auto-check: inget key valid buat execute berikutnya)
+-- ============================================================
+local KEY_FILE = "AutomaHub/key.txt"
+local function saveKey(key)
+    if type(key) ~= "string" or key == "" then return end
+    pcall(function()
+        if type(makefolder) == "function" and type(isfolder) == "function" and not isfolder("AutomaHub") then
+            makefolder("AutomaHub")
+        end
+        if type(writefile) == "function" then writefile(KEY_FILE, key) end
+    end)
+end
+local function readSavedKey()
+    local ok, data = pcall(function()
+        if type(isfile) == "function" and isfile(KEY_FILE) and type(readfile) == "function" then
+            return readfile(KEY_FILE)
+        end
+        return nil
+    end)
+    if ok and type(data) == "string" and data ~= "" then return data end
+    return nil
+end
+local function clearSavedKey()
+    pcall(function()
+        if type(isfile) == "function" and isfile(KEY_FILE) and type(delfile) == "function" then
+            delfile(KEY_FILE)
+        end
+    end)
+end
+
+-- ============================================================
 -- PER-MAP ROUTING
 -- ============================================================
 local function loadMapConfig()
@@ -111,6 +142,8 @@ end
 -- dipanggil pas key VALID (hook dari KeySystemAutomaHub.lua onValid)
 -- ============================================================
 local function onGranted(key)
+    -- inget key valid ini buat auto-check di execute berikutnya
+    saveKey(key)
     -- [0] cek per-map config (sebelum loading screen)
     local mapConfig = loadMapConfig()
 
@@ -241,11 +274,30 @@ if getgenv then
 end
 
 -- ============================================================
+-- AUTO-CHECK: coba key tersimpan dulu (skip Key UI kalau masih valid)
+-- ============================================================
+local autoOk = false
+local savedKey = readSavedKey()
+if savedKey then
+    if getgenv then getgenv().SCRIPT_KEY = savedKey end
+    if validateKeyViaLuaegis(savedKey) == "VALID" then
+        autoOk = true
+        onGranted(savedKey)
+    else
+        -- key tersimpan udah ga valid / expired -> buang, lanjut Key UI manual
+        clearSavedKey()
+        if getgenv then getgenv().SCRIPT_KEY = nil end
+    end
+end
+
+-- ============================================================
 -- buka Key UI (dia yang manggil onGranted pas valid)
 -- ============================================================
-local keySrc = httpGet(KEY_URL)
-if keySrc then
-    runSource(keySrc, "KeySystem")
-else
-    warn("[AutomaHub] gagal load Key UI dari " .. KEY_URL)
+if not autoOk then
+    local keySrc = httpGet(KEY_URL)
+    if keySrc then
+        runSource(keySrc, "KeySystem")
+    else
+        warn("[AutomaHub] gagal load Key UI dari " .. KEY_URL)
+    end
 end
