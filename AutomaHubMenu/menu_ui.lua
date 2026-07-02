@@ -177,11 +177,16 @@ local Panel = Instance.new("Frame")
 Panel.Name = "Panel"
 Panel.AnchorPoint = Vector2.new(0.5, 0.5)
 Panel.Position = UDim2.fromScale(0.5, 0.5)
-Panel.Size = UDim2.fromOffset(660, 460)
+-- Responsif: scale relatif layar, tapi di-cap max 660x460 (desktop tetep sama, mobile ngecil biar ga menuhin layar)
+Panel.Size = UDim2.new(0.92, 0, 0.9, 0)
 Panel.BackgroundColor3 = COL.bg
 Panel.BorderSizePixel = 0
 Panel.Parent = ScreenGui
 Panel.ClipsDescendants = true
+local panelSize = Instance.new("UISizeConstraint")
+panelSize.MaxSize = Vector2.new(660, 460)
+panelSize.MinSize = Vector2.new(300, 240)
+panelSize.Parent = Panel
 local panelCorner = Instance.new("UICorner"); panelCorner.CornerRadius = UDim.new(0, 12); panelCorner.Parent = Panel
 local panelStroke = Instance.new("UIStroke"); panelStroke.Color = COL.border; panelStroke.Thickness = 1; panelStroke.Parent = Panel
 local panelPad = Instance.new("UIPadding")
