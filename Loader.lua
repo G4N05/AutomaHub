@@ -32,6 +32,14 @@ if not successGui then
     error("Failed to load GUI: " .. tostring(errGui))
 end
 
+local successLogic, errLogic = pcall(fetchScript, "AutomaHubGui/LogicFunction.lua")
+if not successLogic then
+    L:setStatus("Error loading logic!")
+    task.wait(1)
+    L:destroy()
+    error("Failed to load logic: " .. tostring(errLogic))
+end
+
 local successMenu, errMenu = pcall(fetchScript, "AutomaHubGui/Menu.lua")
 if not successMenu then
     L:setStatus("Error loading menu!")

@@ -1,5 +1,8 @@
 --!strict
 
+if getgenv().AutomaHubLogic then return getgenv().AutomaHubLogic end
+if _G and _G.AutomaHubLogic then return _G.AutomaHubLogic end
+
 -- Services
 local Players          = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -24,25 +27,29 @@ end)
 -- COMBAT MODULE (Auto Parry, Dash Parry, Auto Dodge Abyss)
 -- =====================================================================
 
-local Character = LocalPlayer.Character or LocalPlayer.CharacterAdded:Wait()
-local Humanoid  = Character:WaitForChild("Humanoid")
-local RootPart  = Character:WaitForChild("HumanoidRootPart")
+local Character: Model? = LocalPlayer.Character
+local Humanoid: Humanoid? = if Character then Character:FindFirstChildOfClass("Humanoid") else nil
+local RootPart: BasePart? = if Character then (Character:FindFirstChild("HumanoidRootPart") :: BasePart?) else nil
 
-local Remotes = ReplicatedStorage:WaitForChild("Remotes")
-local parryResult = Remotes:WaitForChild("Items"):WaitForChild("Parrying Dagger"):WaitForChild("parryResult")
-local DamagevizEvent = Remotes:WaitForChild("Killers"):WaitForChild("Damageviz")
-local SlowAttack = Remotes:WaitForChild("Killers"):FindFirstChild("SlowAttack")
 local KillerTeam = Teams:FindFirstChild("Killer")
 
 local killerDistance = 999
 local killerRoot: BasePart? = nil
-local killerFilterCache: { Instance } = { Character }
+local killerFilterCache: { Instance } = {}
 
-LocalPlayer.CharacterAdded:Connect(function(newChar)
+local function updateCharacterRefs(newChar: Model)
     Character = newChar
-    Humanoid = newChar:WaitForChild("Humanoid") :: Humanoid
-    RootPart = newChar:WaitForChild("HumanoidRootPart") :: BasePart
-end)
+    Humanoid = newChar:WaitForChild("Humanoid", 10) :: Humanoid?
+    RootPart = newChar:WaitForChild("HumanoidRootPart", 10) :: BasePart?
+end
+
+if Character then
+    task.spawn(function()
+        if Character then updateCharacterRefs(Character) end
+    end)
+end
+
+LocalPlayer.CharacterAdded:Connect(updateCharacterRefs)
 
 -- State Toggles & Distances
 local autoParryEnabled = false
@@ -60,7 +67,11 @@ RunService.Heartbeat:Connect(function()
     local nearestRoot: BasePart? = nil
     
     table.clear(killerFilterCache)
-    table.insert(killerFilterCache, Character)
+    if Character then table.insert(killerFilterCache, Character) end
+    
+    if not KillerTeam then
+        KillerTeam = Teams:FindFirstChild("Killer")
+    end
     
     if KillerTeam then
         for _, plr in ipairs(KillerTeam:GetPlayers()) do
@@ -112,6 +123,8 @@ end
 local function hookKillerAnimators()
     for _, c in ipairs(killerAnimConnections) do pcall(function() c:Disconnect() end) end
     table.clear(killerAnimConnections)
+    
+    if not KillerTeam then KillerTeam = Teams:FindFirstChild("Killer") end
     if not KillerTeam then return end
     
     for _, plr in ipairs(KillerTeam:GetPlayers()) do
@@ -147,7 +160,7 @@ local facingDotThreshold = 0.1
 local function canParry(): boolean
     if isOnCooldown or isSilenced or LocalPlayer:GetAttribute("IsDead") then return false end
     if not Character or not Character.Parent or Character:GetAttribute("IsCarried") or Character:GetAttribute("IsHooked") then return false end
-    if CollectionService:HasTag(RootPart, "doing action") then return false end
+    if RootPart and CollectionService:HasTag(RootPart, "doing action") then return false end
     return true
 end
 
@@ -173,7 +186,16 @@ local parryController: any = nil
 local function resolveParryController(): any
     if parryController then return parryController end
     local ok, ParryClient = pcall(function()
-        return require(ReplicatedStorage.Modules.Items.ParryClient)
+        local remotesFolder = ReplicatedStorage:FindFirstChild("Remotes") or ReplicatedStorage:WaitForChild("Remotes", 5)
+        local modulesFolder = ReplicatedStorage:FindFirstChild("Modules")
+        if modulesFolder then
+            local itemsFolder = modulesFolder:FindFirstChild("Items")
+            if itemsFolder then
+                local pc = itemsFolder:FindFirstChild("ParryClient")
+                if pc then return require(pc) end
+            end
+        end
+        return nil
     end)
     if not ok or not ParryClient then return nil end
     if type(getgc) ~= "function" then return nil end
@@ -213,19 +235,41 @@ local function triggerParry()
     attemptParry(parryDistance)
 end
 
-DamagevizEvent.OnClientEvent:Connect(triggerParry)
-if SlowAttack then SlowAttack.OnClientEvent:Connect(triggerParry) end
+-- Non-blocking Async Remotes & Events Listener Setup
+task.spawn(function()
+    local Remotes = ReplicatedStorage:WaitForChild("Remotes", 10)
+    if not Remotes then return end
+    
+    local Items = Remotes:WaitForChild("Items", 10)
+    local Killers = Remotes:WaitForChild("Killers", 10)
+    
+    if Items then
+        local dagger = Items:WaitForChild("Parrying Dagger", 10)
+        if dagger then
+            local pResult = dagger:WaitForChild("parryResult", 10) :: RemoteEvent?
+            if pResult then
+                pResult.OnClientEvent:Connect(function(success, cd)
+                    isResolving = false
+                    if success then
+                        isOnCooldown = true
+                        task.delay(postParryCooldown, function() isOnCooldown = false end)
+                    end
+                end)
+            end
+        end
+    end
+    
+    if Killers then
+        local damageviz = Killers:WaitForChild("Damageviz", 10) :: RemoteEvent?
+        if damageviz then damageviz.OnClientEvent:Connect(triggerParry) end
+        
+        local slowAttack = Killers:FindFirstChild("SlowAttack") :: RemoteEvent?
+        if slowAttack then slowAttack.OnClientEvent:Connect(triggerParry) end
+    end
+end)
 
 onKillerAnim(function(plr, idRaw, animId)
     if ATTACK_ANIM_IDS[animId] then triggerParry() end
-end)
-
-parryResult.OnClientEvent:Connect(function(success, cd)
-    isResolving = false
-    if success then
-        isOnCooldown = true
-        task.delay(postParryCooldown, function() isOnCooldown = false end)
-    end
 end)
 
 UserInputService.InputBegan:Connect(function(input, gp)
@@ -235,8 +279,8 @@ UserInputService.InputBegan:Connect(function(input, gp)
     end
 end)
 
-CollectionService:GetInstanceAddedSignal("Silenced"):Connect(function(i) if i == Character then isSilenced = true end end)
-CollectionService:GetInstanceRemovedSignal("Silenced"):Connect(function(i) if i == Character then isSilenced = false end end)
+CollectionService:GetInstanceAddedSignal("Silenced"):Connect(function(i) if Character and i == Character then isSilenced = true end end)
+CollectionService:GetInstanceRemovedSignal("Silenced"):Connect(function(i) if Character and i == Character then isSilenced = false end end)
 LocalPlayer.CharacterAdded:Connect(function() isOnCooldown, isResolving, isSilenced, parryController = false, false, false, nil end)
 
 RunService.Heartbeat:Connect(function()
@@ -372,11 +416,14 @@ onKillerAnim(function(plr, idRaw, animId)
     if idRaw and tostring(idRaw):find(ABYSS_SKILL_ID) then triggerDodge() end
 end)
 
-if KillerTeam then
-    hookKillerAnimators()
-    KillerTeam.PlayerAdded:Connect(hookKillerAnimators)
-    KillerTeam.PlayerRemoved:Connect(hookKillerAnimators)
-end
+task.spawn(function()
+    if not KillerTeam then KillerTeam = Teams:WaitForChild("Killer", 5) end
+    if KillerTeam then
+        hookKillerAnimators()
+        KillerTeam.PlayerAdded:Connect(hookKillerAnimators)
+        KillerTeam.PlayerRemoved:Connect(hookKillerAnimators)
+    end
+end)
 
 -- =====================================================================
 -- VISUAL (ESP) MODULE
@@ -804,7 +851,7 @@ function ESP.SetSelectedKinds(selected: any)
 end
 
 -- =====================================================================
--- EXPORT COMBINED LOGIC MODULE
+-- EXPORT COMBINED LOGIC MODULE IMMEDIATELY (NON-BLOCKING)
 -- =====================================================================
 local Logic = {
     Combat = {
@@ -828,4 +875,9 @@ local Logic = {
 }
 
 getgenv().AutomaHubLogic = Logic
+if _G then
+    _G.AutomaHubLogic = Logic
+end
+
+warn("[AutomaHub] Logic ready")
 return Logic

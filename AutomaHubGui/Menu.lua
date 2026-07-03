@@ -31,11 +31,16 @@ local Theme = (function()
     return nil
 end)()
 
--- ponytail: require, readfile, or HTTP fallback for Logic module (Combat + ESP)
+-- ponytail: retry-wait bridge loader for Logic module
 local Logic = (function()
-    if getgenv().AutomaHubLogic then
-        return getgenv().AutomaHubLogic
+    for _ = 1, 50 do
+        local globalLogic = getgenv().AutomaHubLogic or (_G and _G.AutomaHubLogic)
+        if globalLogic then return globalLogic end
+        task.wait(0.1)
     end
+    
+    local globalLogic = getgenv().AutomaHubLogic or (_G and _G.AutomaHubLogic)
+    if globalLogic then return globalLogic end
 
     local logicScript = typeof(script) == "Instance" and script.Parent and script.Parent:FindFirstChild("LogicFunction")
     if logicScript and logicScript:IsA("ModuleScript") then
@@ -64,6 +69,16 @@ local Logic = (function()
     return nil
 end)()
 
+local function getLiveCombat(): any
+    local L = getgenv().AutomaHubLogic or (_G and _G.AutomaHubLogic) or Logic
+    return L and L.Combat
+end
+
+local function getLiveESP(): any
+    local L = getgenv().AutomaHubLogic or (_G and _G.AutomaHubLogic) or Logic
+    return L and L.ESP
+end
+
 local Window = getgenv().Window
 if not Window then
     warn("[AutomaHub] Window is not initialized yet!")
@@ -84,95 +99,95 @@ else
 end
 
 -- Init Combat Controls in Combat tab
-local Combat = Logic and Logic.Combat
-if Combat then
-    Tabs.Combat:AddToggle("AutoParryToggle", {
-        Title = "Auto Parry",
-        Description = "Automatically parry killer attacks",
-        Default = false,
-        Callback = function(Value: boolean)
-            Combat.SetAutoParry(Value)
-        end
-    })
+Tabs.Combat:AddToggle("AutoParryToggle", {
+    Title = "Auto Parry",
+    Description = "Automatically parry killer attacks",
+    Default = false,
+    Callback = function(Value: boolean)
+        local C = getLiveCombat()
+        if C then C.SetAutoParry(Value) end
+    end
+})
 
-    Tabs.Combat:AddSlider("ParryDistance", {
-        Title = "Parry Distance",
-        Description = "Parry detection distance",
-        Default = 9,
-        Min = 5,
-        Max = 25,
-        Rounding = 0,
-        Suffix = "u",
-        Callback = function(Value: number)
-            Combat.SetParryDistance(math.floor(Value))
-        end
-    })
+Tabs.Combat:AddSlider("ParryDistance", {
+    Title = "Parry Distance",
+    Description = "Parry detection distance",
+    Default = 9,
+    Min = 5,
+    Max = 25,
+    Rounding = 0,
+    Suffix = "u",
+    Callback = function(Value: number)
+        local C = getLiveCombat()
+        if C then C.SetParryDistance(math.floor(Value)) end
+    end
+})
 
-    Tabs.Combat:AddSlider("DashParryDistance", {
-        Title = "Dash Parry Distance",
-        Description = "Dash parry distance (auto with Auto Parry)",
-        Default = 30,
-        Min = 20,
-        Max = 50,
-        Rounding = 0,
-        Suffix = "u",
-        Callback = function(Value: number)
-            Combat.SetDashParryDistance(math.floor(Value))
-        end
-    })
+Tabs.Combat:AddSlider("DashParryDistance", {
+    Title = "Dash Parry Distance",
+    Description = "Dash parry distance (auto with Auto Parry)",
+    Default = 30,
+    Min = 20,
+    Max = 50,
+    Rounding = 0,
+    Suffix = "u",
+    Callback = function(Value: number)
+        local C = getLiveCombat()
+        if C then C.SetDashParryDistance(math.floor(Value)) end
+    end
+})
 
-    Tabs.Combat:AddToggle("AutoDodgeAbyssToggle", {
-        Title = "Dodge Hidden (Abyss)",
-        Description = "Automatically dodge Abysswalker skills",
-        Default = false,
-        Callback = function(Value: boolean)
-            Combat.SetAutoDodgeAbyss(Value)
-        end
-    })
+Tabs.Combat:AddToggle("AutoDodgeAbyssToggle", {
+    Title = "Dodge Hidden (Abyss)",
+    Description = "Automatically dodge Abysswalker skills",
+    Default = false,
+    Callback = function(Value: boolean)
+        local C = getLiveCombat()
+        if C then C.SetAutoDodgeAbyss(Value) end
+    end
+})
 
-    Tabs.Combat:AddSlider("DodgeDistance", {
-        Title = "Dodge Distance",
-        Description = "Distance to detect & dodge Abyss skills",
-        Default = 25,
-        Min = 15,
-        Max = 35,
-        Rounding = 0,
-        Suffix = "u",
-        Callback = function(Value: number)
-            Combat.SetDodgeDistance(math.floor(Value))
-        end
-    })
+Tabs.Combat:AddSlider("DodgeDistance", {
+    Title = "Dodge Distance",
+    Description = "Distance to detect & dodge Abyss skills",
+    Default = 25,
+    Min = 15,
+    Max = 35,
+    Rounding = 0,
+    Suffix = "u",
+    Callback = function(Value: number)
+        local C = getLiveCombat()
+        if C then C.SetDodgeDistance(math.floor(Value)) end
+    end
+})
 
-    -- Apply defaults to Logic immediately (so values are correct even before user touches sliders)
-    Combat.SetParryDistance(9)
-    Combat.SetDashParryDistance(30)
-    Combat.SetDodgeDistance(25)
-else
-    warn("[AutomaHub] Failed to load Combat module!")
+-- Apply initial defaults to live Combat module immediately
+local C = getLiveCombat()
+if C then
+    C.SetParryDistance(9)
+    C.SetDashParryDistance(30)
+    C.SetDodgeDistance(25)
 end
 
 -- Init Visuals (ESP) Controls in Visuals tab
-local ESP = Logic and Logic.ESP
-if ESP then
-    Tabs.Visuals:AddToggle("ESPMasterToggle", {
-        Title = "Enable ESP",
-        Description = "Master toggle to activate/deactivate ESP",
-        Default = false,
-        Callback = function(Value: boolean)
-            ESP.SetMasterEnabled(Value)
-        end
-    })
+Tabs.Visuals:AddToggle("ESPMasterToggle", {
+    Title = "Enable ESP",
+    Description = "Master toggle to activate/deactivate ESP",
+    Default = false,
+    Callback = function(Value: boolean)
+        local E = getLiveESP()
+        if E then E.SetMasterEnabled(Value) end
+    end
+})
 
-    Tabs.Visuals:AddDropdown("ESPSelection", {
-        Title = "Choose ESP",
-        Description = "Select target ESP types to display",
-        Values = { "Player", "Generator", "Pallet", "SCP / Zombie" },
-        Multi = true,
-        Default = {},
-        Callback = function(Value: any)
-            ESP.SetSelectedKinds(Value)
-        end
-    })
-else
-    warn("[AutomaHub] Failed to load ESP module!")
-end
+Tabs.Visuals:AddDropdown("ESPSelection", {
+    Title = "Choose ESP",
+    Description = "Select target ESP types to display",
+    Values = { "Player", "Generator", "Pallet", "SCP / Zombie" },
+    Multi = true,
+    Default = {},
+    Callback = function(Value: any)
+        local E = getLiveESP()
+        if E then E.SetSelectedKinds(Value) end
+    end
+})
