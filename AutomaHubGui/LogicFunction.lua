@@ -173,17 +173,19 @@ end
 local parryController: any = nil
 local function resolveParryController(): any
     if parryController then return parryController end
-    local ok, ParryClient = pcall(function()
-        return require(ReplicatedStorage.Modules.Items.ParryClient)
-    end)
-    if not ok or not ParryClient then warn("[AutomaHub Debug] Failed to require ParryClient") return nil end
     if type(getgc) ~= "function" then warn("[AutomaHub Debug] getgc is not available") return nil end
+    
     for _, v in ipairs(getgc(true)) do
-        if type(v) == "table" and getmetatable(v) == ParryClient then
-            parryController = v
-            break
+        if type(v) == "table" then
+            local mt = getmetatable(v)
+            -- Check if the metatable has the Parry function (bypasses require() caching issues)
+            if type(mt) == "table" and type(rawget(mt, "Parry")) == "function" and type(rawget(mt, "CanUse")) == "function" then
+                parryController = v
+                break
+            end
         end
     end
+    
     if not parryController then warn("[AutomaHub Debug] getgc could not find ParryClient instance") end
     return parryController
 end
