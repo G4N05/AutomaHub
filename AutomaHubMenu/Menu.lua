@@ -64,13 +64,13 @@ export type Tab = {
 
 export type Window = {
     AddTab: (self: Window, config: TabConfig) -> Tab,
+    SelectTab: (self: Window, index: number) -> (),
     [string]: any
 }
 
 export type FluentAPI = {
     CreateWindow: (self: FluentAPI, config: WindowConfig) -> Window,
     SetTheme: (self: FluentAPI, themeName: string) -> (),
-    SelectTab: (self: FluentAPI, index: number) -> (),
     [string]: any
 }
 
@@ -130,4 +130,4 @@ local SettingsSection = Tabs.Main:AddSection("Settings")
 Theme.Init(Fluent, SettingsSection)
 
 -- Select the first tab automatically on load
-Fluent:SelectTab(1)
+Window:SelectTab(1)
