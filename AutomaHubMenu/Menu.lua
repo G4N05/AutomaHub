@@ -188,3 +188,29 @@ UserInputService.InputChanged:Connect(function(input)
         btn.Position = UDim2.new(startPos.X.Scale, startPos.X.Offset + delta.X, startPos.Y.Scale, startPos.Y.Offset + delta.Y)
     end
 end)
+
+-- ponytail: force unlock mouse when GUI is open, restore when closed
+local RunService = game:GetService("RunService")
+local mouseConn: RBXScriptConnection? = nil
+local lastBehavior = UserInputService.MouseBehavior
+
+task.spawn(function()
+    while true do
+        task.wait(0.1)
+        local isMinimized = Window.Minimized
+        if not isMinimized then
+            if not mouseConn then
+                lastBehavior = UserInputService.MouseBehavior
+                mouseConn = RunService.RenderStepped:Connect(function()
+                    UserInputService.MouseBehavior = Enum.MouseBehavior.Default
+                end)
+            end
+        else
+            if mouseConn then
+                mouseConn:Disconnect()
+                mouseConn = nil
+                UserInputService.MouseBehavior = lastBehavior
+            end
+        end
+    end
+end)
