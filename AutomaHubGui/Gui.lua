@@ -4,6 +4,17 @@ local Fluent = loadstring(game:HttpGet("https://github.com/StyearX/Fluent-Modded
 
 getgenv().Fluent = Fluent
 
+local Window = Fluent:CreateWindow({
+    Title = "AutomaHub",
+    SubTitle = "",
+    TabWidth = 160,
+    Size = UDim2.fromOffset(580, 460),
+    Acrylic = true,
+    Theme = "Charcoal",
+    MinimizeKey = Enum.KeyCode.RightAlt
+})
+getgenv().Window = Window
+
 local UserInputService = game:GetService("UserInputService")
 local isMobile = UserInputService.TouchEnabled and not UserInputService.KeyboardEnabled
 
