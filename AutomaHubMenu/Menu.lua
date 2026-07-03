@@ -1,5 +1,6 @@
 --!strict
 
+local Players  = game:GetService("Players")
 local Fluent = loadstring(game:HttpGet("https://github.com/StyearX/Fluent-Modded/releases/download/Fluent/FluentPro"))() :: any
 
 -- ponytail: require, readfile, or HTTP fallback
@@ -15,80 +16,100 @@ local Theme = (function()
     return loadstring(game:HttpGet("https://raw.githubusercontent.com/G4N05/AutomaHub/main/AutomaHubMenu/Theme.lua"))()
 end)()
 
-local function getAsset(path: string): string
-    local getcustom = (getgenv() :: any).getcustomasset or (getgenv() :: any).getsynasset or (_G :: any).getcustomasset
-    if getcustom then
-        local success, asset = pcall(getcustom, path)
-        if success then return asset end
-        success, asset = pcall(getcustom, "AutomaHub/" .. path)
-        if success then return asset end
-    end
-    return "rbxassetid://6031075929"
+local getsynasset = getcustomasset or (getgenv and getgenv().getcustomasset) or (getgenv and getgenv().getsynasset)
+
+local function getParentGui(): Instance
+    local ok, hui = pcall(function() return (getgenv().gethui or gethui)() end)
+    if ok and hui then return hui end
+    local okc, core = pcall(function() return game:GetService("CoreGui") end)
+    if okc and core then return core end
+    local lp = Players.LocalPlayer or Players:GetPropertyChangedSignal("LocalPlayer"):Wait() or Players.LocalPlayer
+    return lp:WaitForChild("PlayerGui")
 end
 
-local function customizeTitle(windowTitleText: string)
-    local parentGui = (function()
-        local ok, hui = pcall(function() return (getgenv().gethui or gethui)() end)
-        if ok and hui then return hui end
-        local okc, core = pcall(function() return game:GetService("CoreGui") end)
-        if okc and core then return core end
-        return game:GetService("Players").LocalPlayer:WaitForChild("PlayerGui")
-    end)()
+local function loadCustomFont(name: string, path: string): Font?
+    if not getsynasset or not writefile then return nil end
+    local success, err = pcall(function()
+        local ttfAsset = getsynasset(path)
+        local fontData = {
+            name = name,
+            faces = {{
+                name = "Regular",
+                weight = 400,
+                style = "normal",
+                assetId = ttfAsset
+            }}
+        }
+        local fontFileName = "AutomaHub_" .. name .. ".font"
+        writefile(fontFileName, game:GetService("HttpService"):JSONEncode(fontData))
+        local fontAsset = getsynasset(fontFileName)
+        return Font.new(fontAsset)
+    end)
+    if success then
+        return err :: Font
+    end
+    return nil
+end
 
-    local screenGui = parentGui:WaitForChild("Fluent", 2) or parentGui:FindFirstChild("Fluent")
-    if not screenGui then
-        for _, child in ipairs(parentGui:GetChildren()) do
-            if child:IsA("ScreenGui") and child.Name == "Fluent" then
-                screenGui = child
+local function customizeHeader()
+    local titleLabel = nil
+    for i = 1, 30 do
+        for _, descendant in ipairs(getParentGui():GetDescendants()) do
+            if descendant:IsA("TextLabel") and descendant.Text == "GUI" then
+                titleLabel = descendant
                 break
             end
+        end
+        if titleLabel then break end
+        task.wait(0.1)
+    end
+
+    if not titleLabel then return end
+    local parent = titleLabel.Parent
+    if not parent then return end
+
+    titleLabel.Visible = false
+
+    local container = Instance.new("Frame")
+    container.Name = "CustomHeader"
+    container.Size = UDim2.fromScale(1, 1)
+    container.BackgroundTransparency = 1
+    container.Parent = parent
+
+    local layout = Instance.new("UIListLayout")
+    layout.FillDirection = Enum.FillDirection.Horizontal
+    layout.VerticalAlignment = Enum.VerticalAlignment.Center
+    layout.Padding = UDim.new(0, 8)
+    layout.Parent = container
+
+    local logo = Instance.new("ImageLabel")
+    logo.Name = "Logo"
+    logo.Size = UDim2.fromOffset(20, 20)
+    logo.BackgroundTransparency = 1
+    logo.Parent = container
+
+    if getsynasset then
+        local ok, asset = pcall(getsynasset, "Icon/logo.jpg")
+        if ok then
+            logo.Image = asset
         end
     end
 
-    if screenGui then
-        local titleLabel = nil
-        for _, desc in ipairs(screenGui:GetDescendants()) do
-            if desc:IsA("TextLabel") and desc.Text == windowTitleText then
-                titleLabel = desc
-                break
-            end
-        end
+    local nameLabel = Instance.new("TextLabel")
+    nameLabel.Name = "TitleText"
+    nameLabel.Size = UDim2.new(0, 200, 1, 0)
+    nameLabel.BackgroundTransparency = 1
+    nameLabel.Text = "AutomaHub"
+    nameLabel.TextColor3 = Color3.fromRGB(245, 245, 250)
+    nameLabel.TextSize = 18
+    nameLabel.TextXAlignment = Enum.TextXAlignment.Left
+    nameLabel.Parent = container
 
-        if titleLabel then
-            local container = titleLabel.Parent
-            if container then
-                titleLabel.Visible = false
-
-                local logoImage = Instance.new("ImageLabel")
-                logoImage.Name = "AutomaHubLogo"
-                logoImage.Size = UDim2.fromOffset(24, 24)
-                logoImage.Position = UDim2.new(0, 16, 0.5, -12)
-                logoImage.BackgroundTransparency = 1
-                logoImage.Image = getAsset("Icon/logo.jpg")
-                logoImage.Parent = container
-
-                local newTitle = Instance.new("TextLabel")
-                newTitle.Name = "AutomaHubTitle"
-                newTitle.Size = UDim2.new(1, -60, 1, 0)
-                newTitle.Position = UDim2.new(0, 48, 0, 0)
-                newTitle.BackgroundTransparency = 1
-                newTitle.Text = "AutomaHub"
-                newTitle.TextColor3 = Color3.fromRGB(245, 245, 250)
-                newTitle.TextSize = 20
-                newTitle.TextXAlignment = Enum.TextXAlignment.Left
-
-                local fontFace
-                pcall(function()
-                    fontFace = Font.new("rbxgameasset://Fonts/HelloChristmas-1Ge70")
-                end)
-                if fontFace then
-                    newTitle.FontFace = fontFace
-                else
-                    newTitle.Font = Enum.Font.FredokaOne
-                end
-                newTitle.Parent = container
-            end
-        end
+    local customFont = loadCustomFont("HelloChristmas", "hello-christmas-font/HelloChristmas-1Ge70.ttf")
+    if customFont then
+        nameLabel.FontFace = customFont
+    else
+        nameLabel.Font = Enum.Font.GothamBold
     end
 end
 
@@ -102,7 +123,7 @@ local Window = Fluent:CreateWindow({
     MinimizeKey = Enum.KeyCode.LeftControl
 })
 
-customizeTitle("GUI")
+task.spawn(customizeHeader)
 
 local Tabs = {
     Main = Window:AddTab({ Title = "Main", Icon = "" })
@@ -110,4 +131,3 @@ local Tabs = {
 
 Theme.Init(Fluent, Tabs.Main)
 Window:SelectTab(1)
-
