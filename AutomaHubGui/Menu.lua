@@ -10,7 +10,7 @@ local Theme = (function()
         if success then return module end
     end
     
-    local ok, fileContent = pcall(readfile, "AutomaHub/AutomaHubMenu/Theme.lua")
+    local ok, fileContent = pcall(readfile, "AutomaHub/AutomaHubGui/Theme.lua")
     if ok then
         local loader, err = loadstring(fileContent)
         if loader then
@@ -19,7 +19,7 @@ local Theme = (function()
         end
     end
     
-    local ok2, remoteContent = pcall(game.HttpGet, game, "https://raw.githubusercontent.com/G4N05/AutomaHub/main/AutomaHubMenu/Theme.lua")
+    local ok2, remoteContent = pcall(game.HttpGet, game, "https://raw.githubusercontent.com/G4N05/AutomaHub/main/AutomaHubGui/Theme.lua")
     if ok2 then
         local loader, err = loadstring(remoteContent)
         if loader then
