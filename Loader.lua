@@ -24,12 +24,20 @@ task.wait(0.4)
 L:setStatus("Fetching menu resources...")
 L:setProgress(0.6)
 
-local successMenu, err = pcall(fetchScript, "AutomaHubGui/Gui.lua")
+local successGui, errGui = pcall(fetchScript, "AutomaHubGui/Gui.lua")
+if not successGui then
+    L:setStatus("Error loading GUI!")
+    task.wait(1)
+    L:destroy()
+    error("Failed to load GUI: " .. tostring(errGui))
+end
+
+local successMenu, errMenu = pcall(fetchScript, "AutomaHubGui/Menu.lua")
 if not successMenu then
     L:setStatus("Error loading menu!")
     task.wait(1)
     L:destroy()
-    error("Failed to load menu: " .. tostring(err))
+    error("Failed to load menu: " .. tostring(errMenu))
 end
 
 L:setStatus("Loaded successfully!")
