@@ -170,41 +170,21 @@ local function isKillerFacing(): boolean
     return dot >= facingDotThreshold
 end
 
-local parryController: any = nil
-local function resolveParryController(): any
-    if parryController then return parryController end
-    -- Run getgc in a top-level loadstring to escape nested-loadstring sandbox
-    local ctrl = loadstring([[
-        local RS = game:GetService("ReplicatedStorage")
-        local ok, PC = pcall(function() return require(RS.Modules.Items.ParryClient) end)
-        if not ok or not PC then return nil end
-        if type(getgc) ~= "function" then return nil end
-        for _, v in ipairs(getgc(true)) do
-            if type(v) == "table" and getmetatable(v) == PC then return v end
-        end
-        return nil
-    ]])()
-    if ctrl then parryController = ctrl end
-    return parryController
-end
+local parryRemote = Remotes:WaitForChild("Items"):WaitForChild("Parrying Dagger"):WaitForChild("parry")
 
 local function doParryPress()
     isAutoParrying = true
     lastAutoPress = os.clock()
     lastPrePress = os.clock()
-    local ctrl = resolveParryController()
-    if ctrl then
-        warn("[AutomaHub Debug] Found controller, executing Parry()")
-        local ok, err = pcall(function()
-            if ctrl:CanUse() then ctrl:Parry() end
-        end)
-        if not ok then 
-            warn("[AutomaHub Debug] Parry() failed with error:", err)
-            parryController = nil 
-        end
-    else
-        warn("[AutomaHub Debug] Controller is nil!")
+    
+    warn("[AutomaHub Debug] Firing parry remote directly")
+    local ok, err = pcall(function()
+        parryRemote:FireServer()
+    end)
+    if not ok then
+        warn("[AutomaHub Debug] Failed to fire parry remote:", err)
     end
+    
     task.delay(0.05, function() isAutoParrying = false end)
 end
 
