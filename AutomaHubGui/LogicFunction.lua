@@ -173,44 +173,18 @@ end
 local parryController: any = nil
 local function resolveParryController(): any
     if parryController then return parryController end
-    
-    local ok, ParryClient = pcall(function()
-        return require(ReplicatedStorage.Modules.Items.ParryClient)
-    end)
-    
-    if not ok or not ParryClient then 
-        warn("[AutomaHub Debug] Failed to require ParryClient:", ParryClient) 
-        return nil 
-    end
-    
-    if type(getgc) ~= "function" then 
-        warn("[AutomaHub Debug] getgc is not available") 
-        return nil 
-    end
-    
-    warn("[AutomaHub Debug] Required ParryClient:", typeof(ParryClient), tostring(ParryClient))
-    
-    local foundMt = false
-    local foundFuncs = 0
-    for _, v in ipairs(getgc(true)) do
-        if type(v) == "table" then
-            local mt = getmetatable(v)
-            if mt == ParryClient then
-                parryController = v
-                warn("[AutomaHub Debug] Found exact metatable match!")
-                break
-            end
-            if type(mt) == "table" and type(rawget(mt, "Parry")) == "function" then
-                foundMt = true
-            end
-            local rawParry = rawget(v, "Parry")
-            if type(rawParry) == "function" then foundFuncs = foundFuncs + 1 end
+    -- Run getgc in a top-level loadstring to escape nested-loadstring sandbox
+    local ctrl = loadstring([[
+        local RS = game:GetService("ReplicatedStorage")
+        local ok, PC = pcall(function() return require(RS.Modules.Items.ParryClient) end)
+        if not ok or not PC then return nil end
+        if type(getgc) ~= "function" then return nil end
+        for _, v in ipairs(getgc(true)) do
+            if type(v) == "table" and getmetatable(v) == PC then return v end
         end
-    end
-    
-    if not parryController then 
-        warn("[AutomaHub Debug] getgc could not find match. foundMt:", foundMt, "foundFuncs:", foundFuncs) 
-    end
+        return nil
+    ]])()
+    if ctrl then parryController = ctrl end
     return parryController
 end
 
