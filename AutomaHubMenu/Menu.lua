@@ -26,3 +26,5 @@ local Tabs = {
 }
 
 Theme.Init(Fluent, Tabs.Main)
+Window:SelectTab(1)
+
