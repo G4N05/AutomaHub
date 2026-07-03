@@ -17,48 +17,53 @@ local Theme = (function()
 end)()
 
 local getsynasset = getcustomasset or (getgenv and getgenv().getcustomasset) or (getgenv and getgenv().getsynasset)
+local baseUrl = "https://raw.githubusercontent.com/G4N05/AutomaHub/main/"
 
-local function getParentGui(): Instance
-    local ok, hui = pcall(function() return (getgenv().gethui or gethui)() end)
-    if ok and hui then return hui end
-    local okc, core = pcall(function() return game:GetService("CoreGui") end)
-    if okc and core then return core end
-    local lp = Players.LocalPlayer or Players:GetPropertyChangedSignal("LocalPlayer"):Wait() or Players.LocalPlayer
-    return lp:WaitForChild("PlayerGui")
+local function getAsset(path: string): string
+    if not getsynasset then return "" end
+    if isfile and isfile(path) then
+        return getsynasset(path)
+    end
+    if writefile and makefolder then
+        local dir = path:match("^(.+)/")
+        if dir and makefolder then
+            pcall(makefolder, dir)
+        end
+        local success, content = pcall(function()
+            return game:HttpGet(baseUrl .. path)
+        end)
+        if success and content then
+            writefile(path, content)
+            return getsynasset(path)
+        end
+    end
+    return ""
 end
 
-local function loadCustomFont(name: string, path: string): Font?
-    if not getsynasset or not writefile then return nil end
-    local success, err = pcall(function()
-        local ttfAsset = getsynasset(path)
-        local fontData = {
-            name = name,
-            faces = {{
-                name = "Regular",
-                weight = 400,
-                style = "normal",
-                assetId = ttfAsset
-            }}
-        }
-        local fontFileName = "AutomaHub_" .. name .. ".font"
-        writefile(fontFileName, game:GetService("HttpService"):JSONEncode(fontData))
-        local fontAsset = getsynasset(fontFileName)
-        return Font.new(fontAsset)
-    end)
-    if success then
-        return err :: Font
+local function getAllGuiContainers(): {Instance}
+    local containers = {}
+    local okc, core = pcall(function() return game:GetService("CoreGui") end)
+    if okc and core then table.insert(containers, core) end
+    local okh, hui = pcall(function() return (getgenv().gethui or gethui)() end)
+    if okh and hui then table.insert(containers, hui) end
+    if Players.LocalPlayer then
+        local pg = Players.LocalPlayer:FindFirstChild("PlayerGui")
+        if pg then table.insert(containers, pg) end
     end
-    return nil
+    return containers
 end
 
 local function customizeHeader()
-    local titleLabel = nil
+    local titleLabel: TextLabel? = nil
     for i = 1, 30 do
-        for _, descendant in ipairs(getParentGui():GetDescendants()) do
-            if descendant:IsA("TextLabel") and descendant.Text == "GUI" then
-                titleLabel = descendant
-                break
+        for _, container in ipairs(getAllGuiContainers()) do
+            for _, descendant in ipairs(container:GetDescendants()) do
+                if descendant:IsA("TextLabel") and descendant.Text == "GUI" then
+                    titleLabel = descendant
+                    break
+                end
             end
+            if titleLabel then break end
         end
         if titleLabel then break end
         task.wait(0.1)
@@ -69,6 +74,11 @@ local function customizeHeader()
     if not parent then return end
 
     titleLabel.Visible = false
+    for _, sibling in ipairs(parent:GetChildren()) do
+        if sibling:IsA("TextLabel") and sibling ~= titleLabel then
+            sibling.Visible = false
+        end
+    end
 
     local container = Instance.new("Frame")
     container.Name = "CustomHeader"
@@ -88,11 +98,9 @@ local function customizeHeader()
     logo.BackgroundTransparency = 1
     logo.Parent = container
 
-    if getsynasset then
-        local ok, asset = pcall(getsynasset, "Icon/logo.jpg")
-        if ok then
-            logo.Image = asset
-        end
+    local logoAsset = getAsset("Icon/logo.jpg")
+    if logoAsset ~= "" then
+        logo.Image = logoAsset
     end
 
     local nameLabel = Instance.new("TextLabel")
@@ -101,13 +109,32 @@ local function customizeHeader()
     nameLabel.BackgroundTransparency = 1
     nameLabel.Text = "AutomaHub"
     nameLabel.TextColor3 = Color3.fromRGB(245, 245, 250)
-    nameLabel.TextSize = 18
+    nameLabel.TextSize = 22
     nameLabel.TextXAlignment = Enum.TextXAlignment.Left
     nameLabel.Parent = container
 
-    local customFont = loadCustomFont("HelloChristmas", "hello-christmas-font/HelloChristmas-1Ge70.ttf")
-    if customFont then
-        nameLabel.FontFace = customFont
+    local fontAsset = getAsset("hello-christmas-font/HelloChristmas-1Ge70.ttf")
+    if fontAsset ~= "" and writefile then
+        local fontData = {
+            name = "HelloChristmas",
+            faces = {{
+                name = "Regular",
+                weight = 400,
+                style = "normal",
+                assetId = fontAsset
+            }}
+        }
+        local fontFileName = "AutomaHub_HelloChristmas.font"
+        local success, font = pcall(function()
+            writefile(fontFileName, game:GetService("HttpService"):JSONEncode(fontData))
+            local registeredFont = getsynasset(fontFileName)
+            return Font.new(registeredFont)
+        end)
+        if success and font then
+            nameLabel.FontFace = font
+        else
+            nameLabel.Font = Enum.Font.GothamBold
+        end
     else
         nameLabel.Font = Enum.Font.GothamBold
     end
