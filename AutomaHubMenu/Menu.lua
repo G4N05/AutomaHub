@@ -58,7 +58,7 @@ local Window = Fluent:CreateWindow({
     Size = isMobile and UDim2.fromOffset(480, 360) or UDim2.fromOffset(580, 460),
     Acrylic = true,
     Theme = "Charcoal",
-    MinimizeKey = Enum.KeyCode.LeftShift
+    MinimizeKey = Enum.KeyCode.RightAlt
 })
 
 -- ponytail: add logo, bold, and add glitch effect to title text
