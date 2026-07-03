@@ -4,7 +4,7 @@ local Fluent = loadstring(game:HttpGet("https://github.com/StyearX/Fluent-Modded
 
 -- ponytail: require, readfile, or HTTP fallback
 local Theme = (function()
-    if script then
+    if script and script.Parent then
         local success, module = pcall(function()
             return require(script.Parent:WaitForChild("Theme") :: ModuleScript)
         end)
