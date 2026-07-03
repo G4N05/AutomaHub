@@ -50,12 +50,22 @@ for _, desc in ipairs(Window.Root:GetDescendants()) do
         local label = desc :: TextLabel
         label.Font = Enum.Font.GothamBold
         
-        local logoPath = isfile("AutomaHub/Icon/logo.jpg") and "AutomaHub/Icon/logo.jpg" or (isfile("Icon/logo.jpg") and "Icon/logo.jpg" or nil)
+        local logoPath = "AutomaHub/Icon/logo.jpg"
         local asset = nil
-        if logoPath and (getcustomasset or getsynasset) then
-            local success, res = pcall((getcustomasset or getsynasset), logoPath)
-            if success and res then
-                asset = res
+        if (getcustomasset or getsynasset) and writefile then
+            if isfile and not isfile(logoPath) then
+                pcall(makefolder, "AutomaHub")
+                pcall(makefolder, "AutomaHub/Icon")
+                local success, content = pcall(game.HttpGet, game, "https://raw.githubusercontent.com/G4N05/AutomaHub/main/Icon/logo.jpg")
+                if success and content then
+                    pcall(writefile, logoPath, content)
+                end
+            end
+            if isfile and isfile(logoPath) then
+                local success, res = pcall((getcustomasset or getsynasset), logoPath)
+                if success and res then
+                    asset = res
+                end
             end
         end
         
