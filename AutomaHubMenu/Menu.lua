@@ -1,9 +1,51 @@
 --!strict
 
-local Fluent = loadstring(game:HttpGet("https://github.com/StyearX/Fluent-Modded/releases/download/Fluent/FluentPro"))() :: any
+local Fluent = loadstring(game:HttpGet("https://github.com/StyearX/Fluent-Modded/releases/download/Fluent/FluentPro"))() :: FluentAPI
+
+export type WindowConfig = {
+    Title: string,
+    SubTitle: string?,
+    TabWidth: number?,
+    Size: UDim2?,
+    Acrylic: boolean?,
+    Theme: string?,
+    MinimizeKey: Enum.KeyCode?
+}
+
+export type TabConfig = {
+    Title: string,
+    Icon: string?
+}
+
+export type DropdownConfig = {
+    Title: string,
+    Values: { string },
+    Default: string?,
+    Callback: (value: string) -> ()
+}
+
+export type Dropdown = {
+    [string]: any
+}
+
+export type Tab = {
+    AddDropdown: (self: Tab, id: string, config: DropdownConfig) -> Dropdown,
+    [string]: any
+}
+
+export type Window = {
+    AddTab: (self: Window, config: TabConfig) -> Tab,
+    [string]: any
+}
+
+export type FluentAPI = {
+    CreateWindow: (self: FluentAPI, config: WindowConfig) -> Window,
+    SetTheme: (self: FluentAPI, themeName: string) -> (),
+    [string]: any
+}
 
 type ThemeType = {
-    Init: (Fluent: any, Tab: any) -> any
+    Init: (Fluent: FluentAPI, Tab: Tab) -> any
 }
 
 local Theme = (function()
