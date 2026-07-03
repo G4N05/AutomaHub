@@ -2,6 +2,15 @@
 
 local Fluent = loadstring(game:HttpGet("https://github.com/StyearX/Fluent-Modded/releases/download/Fluent/FluentPro"))() :: any
 
+-- ponytail: require, readfile, or HTTP fallback
+local Theme = (function()
+    local success, module = pcall(require, script.Parent:WaitForChild("Theme") :: ModuleScript)
+    if success then return module end
+    local ok, fileContent = pcall(readfile, "AutomaHub/AutomaHubMenu/Theme.lua")
+    if ok then return loadstring(fileContent)() end
+    return loadstring(game:HttpGet("https://raw.githubusercontent.com/G4N05/AutomaHub/main/AutomaHubMenu/Theme.lua"))()
+end)()
+
 local Window = Fluent:CreateWindow({
     Title = "GUI",
     SubTitle = "",
@@ -16,13 +25,4 @@ local Tabs = {
     Main = Window:AddTab({ Title = "Main", Icon = "" })
 }
 
-local ThemeDropdown = Tabs.Main:AddDropdown("ThemeDropdown", {
-    Title = "Theme",
-    Values = { "AMOLED", "Charcoal", "Midnight Blue", "Blood Red", "Pearl White" },
-    Default = "Charcoal",
-    Callback = function(Value: string)
-        Fluent:SetTheme(Value)
-    end
-})
-
-Window:SelectTab(1)
+Theme.Init(Fluent, Tabs.Main)
