@@ -51,41 +51,6 @@ if (getcustomasset or getsynasset) and writefile then
     end
 end
 
-local Players = game:GetService("Players")
-local player = Players.LocalPlayer
-local originalCameraMode = player.CameraMode
-
-local originalMouseBehavior = UserInputService.MouseBehavior
-local originalMouseIcon = UserInputService.MouseIconEnabled
-
-local function unlockMouse()
-    UserInputService.MouseBehavior = Enum.MouseBehavior.Default
-    UserInputService.MouseIconEnabled = true
-    player.CameraMode = Enum.CameraMode.Classic -- allow free mouse movement in first‑person
-end
-
-local function restoreMouse()
-    UserInputService.MouseBehavior = originalMouseBehavior
-    UserInputService.MouseIconEnabled = originalMouseIcon
-    player.CameraMode = originalCameraMode -- revert to original mode (may be LockFirstPerson)
-end
-
--- Unlock mouse when the UI is visible, restore when minimized/closed
-Window:GetPropertyChangedSignal("Minimized"):Connect(function()
-    if not Window.Minimized then
-        unlockMouse()
-    else
-        restoreMouse()
-    end
-end)
-
--- Ensure correct state on script start
-if not Window.Minimized then
-    unlockMouse()
-else
-    restoreMouse()
-end
-
 -- ponytail: add logo, bold, and add glitch effect to title text
 for _, desc in ipairs(Window.Root:GetDescendants()) do
     if desc:IsA("TextLabel") and desc.Text == "AutomaHub" then
@@ -213,29 +178,4 @@ UserInputService.InputChanged:Connect(function(input)
         btn.Position = UDim2.new(startPos.X.Scale, startPos.X.Offset + delta.X, startPos.Y.Scale, startPos.Y.Offset + delta.Y)
     end
 end)
-
--- ponytail: force unlock mouse when GUI is open, restore when closed
-local RunService = game:GetService("RunService")
-local mouseConn: RBXScriptConnection? = nil
-local lastBehavior = UserInputService.MouseBehavior
-
-task.spawn(function()
-    while true do
-        task.wait(0.1)
-        local isMinimized = Window.Minimized
-        if not isMinimized then
-            if not mouseConn then
-                lastBehavior = UserInputService.MouseBehavior
-                mouseConn = RunService.RenderStepped:Connect(function()
-                    UserInputService.MouseBehavior = Enum.MouseBehavior.Default
-                end)
-            end
-        else
-            if mouseConn then
-                mouseConn:Disconnect()
-                mouseConn = nil
-                UserInputService.MouseBehavior = lastBehavior
-            end
-        end
-    end
-end)
+
