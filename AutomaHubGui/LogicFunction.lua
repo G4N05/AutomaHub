@@ -176,14 +176,15 @@ local function resolveParryController(): any
     local ok, ParryClient = pcall(function()
         return require(ReplicatedStorage.Modules.Items.ParryClient)
     end)
-    if not ok or not ParryClient then return nil end
-    if type(getgc) ~= "function" then return nil end
+    if not ok or not ParryClient then warn("[AutomaHub Debug] Failed to require ParryClient") return nil end
+    if type(getgc) ~= "function" then warn("[AutomaHub Debug] getgc is not available") return nil end
     for _, v in ipairs(getgc(true)) do
         if type(v) == "table" and getmetatable(v) == ParryClient then
             parryController = v
             break
         end
     end
+    if not parryController then warn("[AutomaHub Debug] getgc could not find ParryClient instance") end
     return parryController
 end
 
@@ -193,19 +194,29 @@ local function doParryPress()
     lastPrePress = os.clock()
     local ctrl = resolveParryController()
     if ctrl then
-        local ok = pcall(function()
+        warn("[AutomaHub Debug] Found controller, executing Parry()")
+        local ok, err = pcall(function()
             if ctrl:CanUse() then ctrl:Parry() end
         end)
-        if not ok then parryController = nil end
+        if not ok then 
+            warn("[AutomaHub Debug] Parry() failed with error:", err)
+            parryController = nil 
+        end
+    else
+        warn("[AutomaHub Debug] Controller is nil!")
     end
     task.delay(0.05, function() isAutoParrying = false end)
 end
 
 local function attemptParry(maxRange: number)
-    if not autoParryEnabled or killerDistance > maxRange or not canParry() then return end
-    if (os.clock() - lastPrePress) < rearmCooldown then return end
-    if not hasLineOfSight() then return end
-    if not isKillerFacing() then return end
+    if not autoParryEnabled then warn("[AutomaHub Debug] AutoParry disabled") return end
+    if killerDistance > maxRange then warn("[AutomaHub Debug] Out of range:", killerDistance, ">", maxRange) return end
+    if not canParry() then warn("[AutomaHub Debug] canParry() is false. CD:", isOnCooldown, "Silenced:", isSilenced) return end
+    if (os.clock() - lastPrePress) < rearmCooldown then warn("[AutomaHub Debug] Rearm cooldown active") return end
+    if not hasLineOfSight() then warn("[AutomaHub Debug] No line of sight") return end
+    if not isKillerFacing() then warn("[AutomaHub Debug] Killer not facing") return end
+    
+    warn("[AutomaHub Debug] attemptParry PASSED ALL CHECKS, calling doParryPress()")
     doParryPress()
 end
 
