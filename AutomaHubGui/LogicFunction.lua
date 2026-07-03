@@ -52,9 +52,8 @@ local dashDistance = 30
 local autoDodgeEnabled = false
 local dodgeDistance = 25
 
--- Optimized Heartbeat for Killer Tracking (Only runs when Combat features are active)
+-- Heartbeat for Killer Tracking (Always runs so killer distance/root are valid)
 RunService.Heartbeat:Connect(function()
-    if not autoParryEnabled and not autoDodgeEnabled then return end
     if not RootPart or not RootPart.Parent then return end
     
     local nearest = 9999
@@ -170,33 +169,40 @@ local function isKillerFacing(): boolean
     return dot >= facingDotThreshold
 end
 
-local VIM = game:GetService("VirtualInputManager")
+local parryController: any = nil
+local function resolveParryController(): any
+    if parryController then return parryController end
+    local ok, ParryClient = pcall(function()
+        return require(ReplicatedStorage.Modules.Items.ParryClient)
+    end)
+    if not ok or not ParryClient then return nil end
+    if type(getgc) ~= "function" then return nil end
+    for _, v in ipairs(getgc(true)) do
+        if type(v) == "table" and getmetatable(v) == ParryClient then
+            parryController = v
+            break
+        end
+    end
+    return parryController
+end
 
 local function doParryPress()
     isAutoParrying = true
     lastAutoPress = os.clock()
     lastPrePress = os.clock()
-    -- Simulate right-click (parry input) via VirtualInputManager (works on PC+Mobile executors)
-    local ok = pcall(function()
-        VIM:SendMouseButtonEvent(0, 0, Enum.UserInputType.MouseButton2, true, game, 0)
-    end)
-    if not ok then
-        -- Fallback: try fireclickdetector / mouse1click style via generic executor API
-        pcall(function()
-            mouse2press()
+    local ctrl = resolveParryController()
+    if ctrl then
+        local ok = pcall(function()
+            if ctrl:CanUse() then ctrl:Parry() end
         end)
+        if not ok then parryController = nil end
     end
-    task.delay(0.05, function()
-        pcall(function()
-            VIM:SendMouseButtonEvent(0, 0, Enum.UserInputType.MouseButton2, false, game, 0)
-        end)
-        pcall(function() mouse2release() end)
-        isAutoParrying = false
-    end)
+    task.delay(0.05, function() isAutoParrying = false end)
 end
 
 local function attemptParry(maxRange: number)
-    if not autoParryEnabled or killerDistance > maxRange or not canParry() then return end
+    if not autoParryEnabled then return end
+    if killerDistance > maxRange or not canParry() then return end
     if (os.clock() - lastPrePress) < rearmCooldown then return end
     if not hasLineOfSight() then return end
     if not isKillerFacing() then return end
