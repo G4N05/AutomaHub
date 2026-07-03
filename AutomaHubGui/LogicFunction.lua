@@ -173,20 +173,23 @@ end
 local parryController: any = nil
 local function resolveParryController(): any
     if parryController then return parryController end
+    -- Match instance by its exact class metatable (ParryClient), same as the
+    -- working standalone script. The old loose duck-typing scan grabbed the
+    -- first table with .Parry/.CanUse (usually the class module/prototype),
+    -- so :Parry() ran without instance state and silently did nothing.
+    local ok, ParryClient = pcall(function()
+        return require(ReplicatedStorage.Modules.Items.ParryClient)
+    end)
+    if not ok or not ParryClient then return nil end
     if type(getgc) ~= "function" then return nil end
-    
+
     for _, v in ipairs(getgc(true)) do
-        if type(v) == "table" then
-            local ok, isCtrl = pcall(function()
-                return type(v.Parry) == "function" and type(v.CanUse) == "function"
-            end)
-            if ok and isCtrl then
-                parryController = v
-                break
-            end
+        if type(v) == "table" and getmetatable(v) == ParryClient then
+            parryController = v
+            break
         end
     end
-    
+
     return parryController
 end
 
