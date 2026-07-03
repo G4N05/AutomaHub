@@ -1,6 +1,5 @@
 --!strict
 
-local Players  = game:GetService("Players")
 local Fluent = loadstring(game:HttpGet("https://github.com/StyearX/Fluent-Modded/releases/download/Fluent/FluentPro"))() :: any
 
 -- ponytail: require, readfile, or HTTP fallback
@@ -16,130 +15,51 @@ local Theme = (function()
     return loadstring(game:HttpGet("https://raw.githubusercontent.com/G4N05/AutomaHub/main/AutomaHubMenu/Theme.lua"))()
 end)()
 
-local getsynasset = getcustomasset or (getgenv and getgenv().getcustomasset) or (getgenv and getgenv().getsynasset)
-local baseUrl = "https://raw.githubusercontent.com/G4N05/AutomaHub/main/"
-
-local function getAsset(path: string): string
-    if not getsynasset then return "" end
-    if isfile and isfile(path) then
-        return getsynasset(path)
-    end
-    if writefile and makefolder then
-        local dir = path:match("^(.+)/")
-        if dir and makefolder then
-            pcall(makefolder, dir)
-        end
-        local success, content = pcall(function()
-            return game:HttpGet(baseUrl .. path)
-        end)
-        if success and content then
-            writefile(path, content)
-            return getsynasset(path)
-        end
-    end
-    return ""
-end
-
-local function getAllGuiContainers(): {Instance}
-    local containers = {}
-    local okc, core = pcall(function() return game:GetService("CoreGui") end)
-    if okc and core then table.insert(containers, core) end
-    local okh, hui = pcall(function() return (getgenv().gethui or gethui)() end)
-    if okh and hui then table.insert(containers, hui) end
-    if Players.LocalPlayer then
-        local pg = Players.LocalPlayer:FindFirstChild("PlayerGui")
-        if pg then table.insert(containers, pg) end
-    end
-    return containers
-end
 
 local function customizeHeader()
-    local titleLabel: TextLabel? = nil
-    for i = 1, 30 do
-        for _, container in ipairs(getAllGuiContainers()) do
-            for _, descendant in ipairs(container:GetDescendants()) do
-                if descendant:IsA("TextLabel") and descendant.Text == "GUI" then
-                    titleLabel = descendant
-                    break
+    local function apply()
+        local parentGui = nil
+        local containers = { (getgenv().gethui or gethui) and (getgenv().gethui or gethui)(), game:GetService("CoreGui"), Players.LocalPlayer:FindFirstChild("PlayerGui") }
+        
+        for _, container in ipairs(containers) do
+            if not container then continue end
+            for _, desc in ipairs(container:GetDescendants()) do
+                if desc:IsA("TextLabel") and desc.Text == "GUI" then
+                    local titleLabel = desc
+                    titleLabel.Text = "AutomaHub"
+                    titleLabel.TextXAlignment = Enum.TextXAlignment.Left
+                    
+                    local parent = titleLabel.Parent
+                    if parent then
+                        local logo = Instance.new("ImageLabel")
+                        logo.Name = "Logo"
+                        logo.BackgroundTransparency = 1
+                        logo.BorderSizePixel = 0
+                        logo.Size = UDim2.fromOffset(18, 18)
+                        logo.Position = UDim2.new(0, 16, 0.5, -9)
+                        logo.Image = (getcustomasset or getsynasset) and (getcustomasset or getsynasset)("Icon/logo.jpg") or "rbxassetid://0"
+                        logo.Parent = parent
+                        
+                        titleLabel.Position = UDim2.new(0, 40, titleLabel.Position.Y.Scale, titleLabel.Position.Y.Offset)
+                    end
+                    return true
                 end
             end
-            if titleLabel then break end
         end
-        if titleLabel then break end
-        task.wait(0.1)
+        return false
     end
-
-    if not titleLabel then return end
-    local parent = titleLabel.Parent
-    if not parent then return end
-
-    titleLabel.Visible = false
-    for _, sibling in ipairs(parent:GetChildren()) do
-        if sibling:IsA("TextLabel") and sibling ~= titleLabel then
-            sibling.Visible = false
-        end
-    end
-
-    local container = Instance.new("Frame")
-    container.Name = "CustomHeader"
-    container.Size = UDim2.fromScale(1, 1)
-    container.BackgroundTransparency = 1
-    container.Parent = parent
-
-    local layout = Instance.new("UIListLayout")
-    layout.FillDirection = Enum.FillDirection.Horizontal
-    layout.VerticalAlignment = Enum.VerticalAlignment.Center
-    layout.Padding = UDim.new(0, 8)
-    layout.Parent = container
-
-    local logo = Instance.new("ImageLabel")
-    logo.Name = "Logo"
-    logo.Size = UDim2.fromOffset(20, 20)
-    logo.BackgroundTransparency = 1
-    logo.Parent = container
-
-    local logoAsset = getAsset("Icon/logo.jpg")
-    if logoAsset ~= "" then
-        logo.Image = logoAsset
-    end
-
-    local nameLabel = Instance.new("TextLabel")
-    nameLabel.Name = "TitleText"
-    nameLabel.Size = UDim2.new(0, 200, 1, 0)
-    nameLabel.BackgroundTransparency = 1
-    nameLabel.Text = "AutomaHub"
-    nameLabel.TextColor3 = Color3.fromRGB(245, 245, 250)
-    nameLabel.TextSize = 22
-    nameLabel.TextXAlignment = Enum.TextXAlignment.Left
-    nameLabel.Parent = container
-
-    local fontAsset = getAsset("hello-christmas-font/HelloChristmas-1Ge70.ttf")
-    if fontAsset ~= "" and writefile then
-        local fontData = {
-            name = "HelloChristmas",
-            faces = {{
-                name = "Regular",
-                weight = 400,
-                style = "normal",
-                assetId = fontAsset
-            }}
-        }
-        local fontFileName = "AutomaHub_HelloChristmas.font"
-        local success, font = pcall(function()
-            writefile(fontFileName, game:GetService("HttpService"):JSONEncode(fontData))
-            local registeredFont = getsynasset(fontFileName)
-            return Font.new(registeredFont)
+    
+    if not apply() then
+        task.defer(function()
+            for i = 1, 10 do
+                if apply() then break end
+                task.wait(0.1)
+            end
         end)
-        if success and font then
-            nameLabel.FontFace = font
-        else
-            nameLabel.Font = Enum.Font.GothamBold
-        end
-    else
-        nameLabel.Font = Enum.Font.GothamBold
     end
 end
 
+local Players = game:GetService("Players")
 local Window = Fluent:CreateWindow({
     Title = "GUI",
     SubTitle = "",
@@ -150,7 +70,8 @@ local Window = Fluent:CreateWindow({
     MinimizeKey = Enum.KeyCode.LeftControl
 })
 
-task.spawn(customizeHeader)
+customizeHeader()
+
 
 local Tabs = {
     Main = Window:AddTab({ Title = "Main", Icon = "" })
@@ -158,3 +79,4 @@ local Tabs = {
 
 Theme.Init(Fluent, Tabs.Main)
 Window:SelectTab(1)
+
