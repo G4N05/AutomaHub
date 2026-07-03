@@ -48,16 +48,29 @@ local Window = Fluent:CreateWindow({
 for _, desc in ipairs(Window.Root:GetDescendants()) do
     if desc:IsA("TextLabel") and desc.Text == "AutomaHub" then
         local label = desc :: TextLabel
-        label.Position = UDim2.new(0, 32, 0, 0)
         label.Font = Enum.Font.GothamBold
         
-        local logo = Instance.new("ImageLabel")
-        logo.Name = "CustomLogo"
-        logo.BackgroundTransparency = 1
-        logo.Position = UDim2.new(0, 0, 0.5, -12)
-        logo.Size = UDim2.fromOffset(24, 24)
-        logo.Image = (getcustomasset or getsynasset)(isfile("AutomaHub/Icon/logo.jpg") and "AutomaHub/Icon/logo.jpg" or "Icon/logo.jpg")
-        logo.Parent = label.Parent
+        local logoPath = isfile("AutomaHub/Icon/logo.jpg") and "AutomaHub/Icon/logo.jpg" or (isfile("Icon/logo.jpg") and "Icon/logo.jpg" or nil)
+        local asset = nil
+        if logoPath and (getcustomasset or getsynasset) then
+            local success, res = pcall((getcustomasset or getsynasset), logoPath)
+            if success and res then
+                asset = res
+            end
+        end
+        
+        if asset then
+            label.Position = UDim2.new(0, 32, 0, 0)
+            local logo = Instance.new("ImageLabel")
+            logo.Name = "CustomLogo"
+            logo.BackgroundTransparency = 1
+            logo.Position = UDim2.new(0, 0, 0.5, -12)
+            logo.Size = UDim2.fromOffset(24, 24)
+            logo.Image = asset
+            logo.Parent = label.Parent
+        else
+            label.Position = UDim2.new(0, 0, 0, 0)
+        end
         
         -- Glitch effect loop
         task.spawn(function()
