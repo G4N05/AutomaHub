@@ -31,10 +31,10 @@ local Theme = (function()
     return nil
 end)()
 
--- ponytail: require, readfile, or HTTP fallback for ESP (LogicFunction) module
-local ESP = (function()
-    if getgenv().AutomaHubESP then
-        return getgenv().AutomaHubESP
+-- ponytail: require, readfile, or HTTP fallback for Logic module (Combat + ESP)
+local Logic = (function()
+    if getgenv().AutomaHubLogic then
+        return getgenv().AutomaHubLogic
     end
 
     local logicScript = typeof(script) == "Instance" and script.Parent and script.Parent:FindFirstChild("LogicFunction")
@@ -72,6 +72,7 @@ end
 
 local Tabs = {
     Main = Window:AddTab({ Title = "Main", Icon = "home" }),
+    Combat = Window:AddTab({ Title = "Combat", Icon = "swords" }),
     Visuals = Window:AddTab({ Title = "Visuals", Icon = "eye" })
 }
 
@@ -82,7 +83,68 @@ else
     warn("[AutomaHub] Failed to load Theme module!")
 end
 
+-- Init Combat Controls in Combat tab
+local Combat = Logic and Logic.Combat
+if Combat then
+    Tabs.Combat:AddToggle("AutoParryToggle", {
+        Title = "Auto Parry",
+        Description = "Automatically parry killer attacks",
+        Default = false,
+        Callback = function(Value: boolean)
+            Combat.SetAutoParry(Value)
+        end
+    })
+
+    Tabs.Combat:AddSlider("ParryDistance", {
+        Title = "Parry Distance",
+        Description = "Parry detection distance",
+        Default = 9,
+        Min = 5,
+        Max = 25,
+        Rounding = 0,
+        Callback = function(Value: number)
+            Combat.SetParryDistance(Value)
+        end
+    })
+
+    Tabs.Combat:AddSlider("DashParryDistance", {
+        Title = "Dash Parry Distance",
+        Description = "Dash parry detection distance (active with Auto Parry)",
+        Default = 30,
+        Min = 20,
+        Max = 50,
+        Rounding = 0,
+        Callback = function(Value: number)
+            Combat.SetDashParryDistance(Value)
+        end
+    })
+
+    Tabs.Combat:AddToggle("AutoDodgeAbyssToggle", {
+        Title = "Dodge Hidden (Abyss)",
+        Description = "Automatically dodge Abysswalker skills",
+        Default = false,
+        Callback = function(Value: boolean)
+            Combat.SetAutoDodgeAbyss(Value)
+        end
+    })
+
+    Tabs.Combat:AddSlider("DodgeDistance", {
+        Title = "Dodge Distance",
+        Description = "Distance to detect & dodge Abyss skills",
+        Default = 25,
+        Min = 15,
+        Max = 35,
+        Rounding = 0,
+        Callback = function(Value: number)
+            Combat.SetDodgeDistance(Value)
+        end
+    })
+else
+    warn("[AutomaHub] Failed to load Combat module!")
+end
+
 -- Init Visuals (ESP) Controls in Visuals tab
+local ESP = Logic and Logic.ESP
 if ESP then
     Tabs.Visuals:AddToggle("ESPMasterToggle", {
         Title = "Enable ESP",
