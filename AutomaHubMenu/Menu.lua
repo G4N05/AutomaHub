@@ -28,7 +28,36 @@ export type Dropdown = {
     [string]: any
 }
 
+export type ToggleConfig = {
+    Title: string,
+    Default: boolean?,
+    Callback: ((value: boolean) -> ())?
+}
+
+export type Toggle = {
+    [string]: any
+}
+
+export type ButtonConfig = {
+    Title: string,
+    Description: string?,
+    Callback: (() -> ())?
+}
+
+export type Button = {
+    [string]: any
+}
+
+export type Section = {
+    AddToggle: (self: Section, id: string, config: ToggleConfig) -> Toggle,
+    AddButton: (self: Section, config: ButtonConfig) -> Button,
+    AddDropdown: (self: Section, id: string, config: DropdownConfig) -> Dropdown,
+    [string]: any
+}
+
 export type Tab = {
+    AddSection: (self: Tab, title: string) -> Section,
+    AddDivider: (self: Tab) -> (),
     AddDropdown: (self: Tab, id: string, config: DropdownConfig) -> Dropdown,
     [string]: any
 }
@@ -41,11 +70,12 @@ export type Window = {
 export type FluentAPI = {
     CreateWindow: (self: FluentAPI, config: WindowConfig) -> Window,
     SetTheme: (self: FluentAPI, themeName: string) -> (),
+    SelectTab: (self: FluentAPI, index: number) -> (),
     [string]: any
 }
 
 type ThemeType = {
-    Init: (Fluent: FluentAPI, Tab: Tab) -> any
+    Init: (Fluent: FluentAPI, Tab: any) -> any
 }
 
 local Theme = (function()
@@ -74,4 +104,30 @@ local Tabs = {
     Main = Window:AddTab({ Title = "Main", Icon = "" })
 }
 
-Theme.Init(Fluent, Tabs.Main)
+-- ponytail: simple Toggle and Button contents for the tab
+local MainSection = Tabs.Main:AddSection("Main Controls")
+
+MainSection:AddToggle("AutoFarm", {
+    Title = "Auto Farm",
+    Default = false,
+    Callback = function(Value: boolean)
+        print("Auto Farm set to:", Value)
+    end
+})
+
+MainSection:AddButton({
+    Title = "Teleport to Spawn",
+    Description = "Teleport character to spawn point",
+    Callback = function()
+        print("Teleporting...")
+    end
+})
+
+-- ponytail: border / divider separating content and settings
+Tabs.Main:AddDivider()
+
+local SettingsSection = Tabs.Main:AddSection("Settings")
+Theme.Init(Fluent, SettingsSection)
+
+-- Select the first tab automatically on load
+Fluent:SelectTab(1)
