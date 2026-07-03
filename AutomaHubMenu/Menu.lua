@@ -31,11 +31,14 @@ local Theme = (function()
     return nil
 end)()
 
+local UserInputService = game:GetService("UserInputService")
+local isMobile = UserInputService.TouchEnabled and not UserInputService.KeyboardEnabled
+
 local Window = Fluent:CreateWindow({
     Title = "AutomaHub",
     SubTitle = "",
-    TabWidth = 160,
-    Size = UDim2.fromOffset(580, 460),
+    TabWidth = isMobile and 120 or 160,
+    Size = isMobile and UDim2.fromOffset(480, 360) or UDim2.fromOffset(580, 460),
     Acrylic = true,
     Theme = "Charcoal",
     MinimizeKey = Enum.KeyCode.LeftControl
