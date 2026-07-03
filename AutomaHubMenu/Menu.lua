@@ -41,10 +41,12 @@ local Window = Fluent:CreateWindow({
     MinimizeKey = Enum.KeyCode.LeftControl
 })
 
--- ponytail: replace title text with logo and custom font text
+-- ponytail: add logo, bold, and add glitch effect to title text
 for _, desc in ipairs(Window.Root:GetDescendants()) do
     if desc:IsA("TextLabel") and desc.Text == "AutomaHub" then
-        desc.Visible = false
+        local label = desc :: TextLabel
+        label.Position = UDim2.new(0, 32, 0, 0)
+        label.Font = Enum.Font.GothamBold
         
         local logo = Instance.new("ImageLabel")
         logo.Name = "CustomLogo"
@@ -52,22 +54,37 @@ for _, desc in ipairs(Window.Root:GetDescendants()) do
         logo.Position = UDim2.new(0, 0, 0.5, -12)
         logo.Size = UDim2.fromOffset(24, 24)
         logo.Image = (getcustomasset or getsynasset)(isfile("AutomaHub/Icon/logo.jpg") and "AutomaHub/Icon/logo.jpg" or "Icon/logo.jpg")
-        logo.Parent = desc.Parent
+        logo.Parent = label.Parent
         
-        local label = Instance.new("TextLabel")
-        label.Name = "CustomTitle"
-        label.BackgroundTransparency = 1
-        label.Position = UDim2.new(0, 32, 0, 0)
-        label.Size = UDim2.new(1, -32, 1, 0)
-        label.Text = "AutomaHub"
-        label.TextColor3 = Color3.fromRGB(245, 245, 250)
-        label.TextSize = 22
-        label.TextXAlignment = Enum.TextXAlignment.Left
-        label.TextYAlignment = Enum.TextYAlignment.Center
-        
-        local fontUrl = (getcustomasset or getsynasset)(isfile("AutomaHub/Icon/King Luau.ttf") and "AutomaHub/Icon/King Luau.ttf" or "Icon/King Luau.ttf")
-        label.FontFace = Font.new(fontUrl)
-        label.Parent = desc.Parent
+        -- Glitch effect loop
+        task.spawn(function()
+            local rng = Random.new()
+            local originalPos = label.Position
+            local originalText = label.Text
+            local chars = {"#", "@", "$", "%", "*", "!", "?", "0", "1"}
+            
+            while label and label.Parent do
+                task.wait(rng:NextNumber(0.08, 0.45))
+                if not (label and label.Parent) then break end
+                
+                if rng:NextNumber() < 0.35 then
+                    local dx = rng:NextInteger(-2, 2)
+                    local dy = rng:NextInteger(-1, 1)
+                    label.Position = originalPos + UDim2.fromOffset(dx, dy)
+                    
+                    if rng:NextNumber() < 0.5 then
+                        local len = string.len(originalText)
+                        local idx = rng:NextInteger(1, len)
+                        label.Text = string.sub(originalText, 1, idx - 1) .. chars[rng:NextInteger(1, #chars)] .. string.sub(originalText, idx + 1)
+                    end
+                    
+                    task.wait(rng:NextNumber(0.02, 0.08))
+                    if not (label and label.Parent) then break end
+                    label.Position = originalPos
+                    label.Text = originalText
+                end
+            end
+        end)
         break
     end
 end
