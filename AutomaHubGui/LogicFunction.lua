@@ -170,29 +170,35 @@ local function isKillerFacing(): boolean
     return dot >= facingDotThreshold
 end
 
-local VIM = game:GetService("VirtualInputManager")
+local parryController: any = nil
+local function resolveParryController(): any
+    if parryController then return parryController end
+    local ok, ParryClient = pcall(function()
+        return require(ReplicatedStorage.Modules.Items.ParryClient)
+    end)
+    if not ok or not ParryClient then return nil end
+    if type(getgc) ~= "function" then return nil end
+    for _, v in ipairs(getgc(true)) do
+        if type(v) == "table" and getmetatable(v) == ParryClient then
+            parryController = v
+            break
+        end
+    end
+    return parryController
+end
 
 local function doParryPress()
     isAutoParrying = true
     lastAutoPress = os.clock()
     lastPrePress = os.clock()
-    -- Simulate right-click (parry input) via VirtualInputManager (works on PC+Mobile executors)
-    local ok = pcall(function()
-        VIM:SendMouseButtonEvent(0, 0, Enum.UserInputType.MouseButton2, true, game, 0)
-    end)
-    if not ok then
-        -- Fallback: try fireclickdetector / mouse1click style via generic executor API
-        pcall(function()
-            mouse2press()
+    local ctrl = resolveParryController()
+    if ctrl then
+        local ok = pcall(function()
+            if ctrl:CanUse() then ctrl:Parry() end
         end)
+        if not ok then parryController = nil end
     end
-    task.delay(0.05, function()
-        pcall(function()
-            VIM:SendMouseButtonEvent(0, 0, Enum.UserInputType.MouseButton2, false, game, 0)
-        end)
-        pcall(function() mouse2release() end)
-        isAutoParrying = false
-    end)
+    task.delay(0.05, function() isAutoParrying = false end)
 end
 
 local function attemptParry(maxRange: number)
@@ -232,6 +238,12 @@ end)
 CollectionService:GetInstanceAddedSignal("Silenced"):Connect(function(i) if i == Character then isSilenced = true end end)
 CollectionService:GetInstanceRemovedSignal("Silenced"):Connect(function(i) if i == Character then isSilenced = false end end)
 LocalPlayer.CharacterAdded:Connect(function() isOnCooldown, isResolving, isSilenced, parryController = false, false, false, nil end)
+
+if KillerTeam then
+    hookKillerAnimators()
+    KillerTeam.PlayerAdded:Connect(hookKillerAnimators)
+    KillerTeam.PlayerRemoved:Connect(hookKillerAnimators)
+end
 
 RunService.Heartbeat:Connect(function()
     if autoParryEnabled and RootPart and CollectionService:HasTag(RootPart, "doing action") then
