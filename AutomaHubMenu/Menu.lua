@@ -52,58 +52,39 @@ if (getcustomasset or getsynasset) and writefile then
 end
 
 local Players = game:GetService("Players")
-local LocalPlayer = Players.LocalPlayer
+local player = Players.LocalPlayer
+local originalCameraMode = player.CameraMode
 
-local unlocked = false
+local originalMouseBehavior = UserInputService.MouseBehavior
+local originalMouseIcon = UserInputService.MouseIconEnabled
 
--- While unlocked: force mouse Default + cursor each frame (overrides LockCenter)
-task.spawn(function()
-    while true do
-        if unlocked then
-            pcall(function()
-                UserInputService.MouseBehavior = Enum.MouseBehavior.Default
-                UserInputService.MouseIconEnabled = true
-            end)
-        end
-        task.wait()
+local function unlockMouse()
+    UserInputService.MouseBehavior = Enum.MouseBehavior.Default
+    UserInputService.MouseIconEnabled = true
+    player.CameraMode = Enum.CameraMode.Classic -- allow free mouse movement in first‑person
+end
+
+local function restoreMouse()
+    UserInputService.MouseBehavior = originalMouseBehavior
+    UserInputService.MouseIconEnabled = originalMouseIcon
+    player.CameraMode = originalCameraMode -- revert to original mode (may be LockFirstPerson)
+end
+
+-- Unlock mouse when the UI is visible, restore when minimized/closed
+Window:GetPropertyChangedSignal("Minimized"):Connect(function()
+    if not Window.Minimized then
+        unlockMouse()
+    else
+        restoreMouse()
     end
 end)
 
--- ---------- GUI toggle ----------
-local gui = Instance.new("ScreenGui")
-gui.Name = "AutomaHub_MouseUnlock"
-gui.ResetOnSpawn = false
-gui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
-pcall(function() gui.Parent = (gethui and gethui()) or game:GetService("CoreGui") end)
-if not gui.Parent then gui.Parent = LocalPlayer:WaitForChild("PlayerGui") end
-
-local btn = Instance.new("TextButton")
-btn.Size = UDim2.new(0, 160, 0, 40)
-btn.Position = UDim2.new(0, 20, 0.5, -20)
-btn.BackgroundColor3 = Color3.fromRGB(70, 70, 70)
-btn.BorderSizePixel = 0
-btn.Font = Enum.Font.GothamBold
-btn.TextSize = 14
-btn.TextColor3 = Color3.fromRGB(0, 0, 0)
-btn.AutoButtonColor = false
-btn.Text = "Mouse: LOCKED"
-btn.Active = true
-btn.Draggable = true
-btn.Parent = gui
-Instance.new("UICorner", btn).CornerRadius = UDim.new(0, 8)
-
-local function setUnlock(v)
-    unlocked = v
-    btn.Text = "Mouse: " .. (v and "UNLOCKED" or "LOCKED")
-    btn.BackgroundColor3 = v and Color3.fromRGB(0, 255, 170) or Color3.fromRGB(70, 70, 70)
+-- Ensure correct state on script start
+if not Window.Minimized then
+    unlockMouse()
+else
+    restoreMouse()
 end
-
-btn.MouseButton1Click:Connect(function() setUnlock(not unlocked) end)
-UserInputService.InputBegan:Connect(function(input, gp)
-    if not gp and input.KeyCode == Enum.KeyCode.RightControl then setUnlock(not unlocked) end
-end)
-
-warn("[AutomaHub] Mouse Unlock loaded. Klik tombol / pencet RightControl buat toggle.")
 
 -- ponytail: add logo, bold, and add glitch effect to title text
 for _, desc in ipairs(Window.Root:GetDescendants()) do
