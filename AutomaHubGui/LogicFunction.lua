@@ -170,21 +170,39 @@ local function isKillerFacing(): boolean
     return dot >= facingDotThreshold
 end
 
-local parryRemote = Remotes:WaitForChild("Items"):WaitForChild("Parrying Dagger"):WaitForChild("parry")
+local parryController: any = nil
+local function resolveParryController(): any
+    if parryController then return parryController end
+    if type(getgc) ~= "function" then return nil end
+    
+    for _, v in ipairs(getgc(true)) do
+        if type(v) == "table" then
+            local ok, isCtrl = pcall(function()
+                return type(v.Parry) == "function" and type(v.CanUse) == "function"
+            end)
+            if ok and isCtrl then
+                parryController = v
+                break
+            end
+        end
+    end
+    
+    return parryController
+end
 
 local function doParryPress()
     isAutoParrying = true
     lastAutoPress = os.clock()
     lastPrePress = os.clock()
-    
-    warn("[AutomaHub Debug] Firing parry remote directly")
-    local ok, err = pcall(function()
-        parryRemote:FireServer()
-    end)
-    if not ok then
-        warn("[AutomaHub Debug] Failed to fire parry remote:", err)
+    local ctrl = resolveParryController()
+    if ctrl then
+        local ok, err = pcall(function()
+            if ctrl:CanUse() then ctrl:Parry() end
+        end)
+        if not ok then parryController = nil end
+    else
+        warn("[AutomaHub Debug] Controller is nil!")
     end
-    
     task.delay(0.05, function() isAutoParrying = false end)
 end
 
