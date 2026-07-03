@@ -51,17 +51,23 @@ if (getcustomasset or getsynasset) and writefile then
     end
 end
 
+local Players = game:GetService("Players")
+local player = Players.LocalPlayer
+local originalCameraMode = player.CameraMode
+
 local originalMouseBehavior = UserInputService.MouseBehavior
 local originalMouseIcon = UserInputService.MouseIconEnabled
 
 local function unlockMouse()
     UserInputService.MouseBehavior = Enum.MouseBehavior.Default
     UserInputService.MouseIconEnabled = true
+    player.CameraMode = Enum.CameraMode.Classic -- allow free mouse movement in first‑person
 end
 
 local function restoreMouse()
     UserInputService.MouseBehavior = originalMouseBehavior
     UserInputService.MouseIconEnabled = originalMouseIcon
+    player.CameraMode = originalCameraMode -- revert to original mode (may be LockFirstPerson)
 end
 
 -- Unlock mouse when the UI is visible, restore when minimized/closed
