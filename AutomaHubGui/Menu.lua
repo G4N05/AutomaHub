@@ -102,20 +102,22 @@ if Combat then
         Min = 5,
         Max = 25,
         Rounding = 0,
+        Suffix = "u",
         Callback = function(Value: number)
-            Combat.SetParryDistance(Value)
+            Combat.SetParryDistance(math.floor(Value))
         end
     })
 
     Tabs.Combat:AddSlider("DashParryDistance", {
         Title = "Dash Parry Distance",
-        Description = "Dash parry detection distance (active with Auto Parry)",
+        Description = "Dash parry distance (auto with Auto Parry)",
         Default = 30,
         Min = 20,
         Max = 50,
         Rounding = 0,
+        Suffix = "u",
         Callback = function(Value: number)
-            Combat.SetDashParryDistance(Value)
+            Combat.SetDashParryDistance(math.floor(Value))
         end
     })
 
@@ -135,10 +137,16 @@ if Combat then
         Min = 15,
         Max = 35,
         Rounding = 0,
+        Suffix = "u",
         Callback = function(Value: number)
-            Combat.SetDodgeDistance(Value)
+            Combat.SetDodgeDistance(math.floor(Value))
         end
     })
+
+    -- Apply defaults to Logic immediately (so values are correct even before user touches sliders)
+    Combat.SetParryDistance(9)
+    Combat.SetDashParryDistance(30)
+    Combat.SetDodgeDistance(25)
 else
     warn("[AutomaHub] Failed to load Combat module!")
 end
