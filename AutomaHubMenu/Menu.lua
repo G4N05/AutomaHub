@@ -4,12 +4,17 @@ local Fluent = loadstring(game:HttpGet("https://github.com/StyearX/Fluent-Modded
 
 -- ponytail: require, readfile, or HTTP fallback
 local Theme = (function()
-    local success, module = pcall(require, script.Parent:WaitForChild("Theme") :: ModuleScript)
-    if success then return module end
+    if script then
+        local success, module = pcall(function()
+            return require(script.Parent:WaitForChild("Theme") :: ModuleScript)
+        end)
+        if success then return module end
+    end
     local ok, fileContent = pcall(readfile, "AutomaHub/AutomaHubMenu/Theme.lua")
     if ok then return loadstring(fileContent)() end
     return loadstring(game:HttpGet("https://raw.githubusercontent.com/G4N05/AutomaHub/main/AutomaHubMenu/Theme.lua"))()
 end)()
+
 
 local Window = Fluent:CreateWindow({
     Title = "GUI",
