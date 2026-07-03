@@ -32,7 +32,7 @@ local Theme = (function()
 end)()
 
 local Window = Fluent:CreateWindow({
-    Title = "GUI",
+    Title = "",
     SubTitle = "",
     TabWidth = 160,
     Size = UDim2.fromOffset(580, 460),
