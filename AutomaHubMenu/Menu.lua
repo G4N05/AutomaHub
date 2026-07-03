@@ -15,6 +15,82 @@ local Theme = (function()
     return loadstring(game:HttpGet("https://raw.githubusercontent.com/G4N05/AutomaHub/main/AutomaHubMenu/Theme.lua"))()
 end)()
 
+local function getAsset(path: string): string
+    local getcustom = (getgenv() :: any).getcustomasset or (getgenv() :: any).getsynasset or (_G :: any).getcustomasset
+    if getcustom then
+        local success, asset = pcall(getcustom, path)
+        if success then return asset end
+        success, asset = pcall(getcustom, "AutomaHub/" .. path)
+        if success then return asset end
+    end
+    return "rbxassetid://6031075929"
+end
+
+local function customizeTitle(windowTitleText: string)
+    local parentGui = (function()
+        local ok, hui = pcall(function() return (getgenv().gethui or gethui)() end)
+        if ok and hui then return hui end
+        local okc, core = pcall(function() return game:GetService("CoreGui") end)
+        if okc and core then return core end
+        return game:GetService("Players").LocalPlayer:WaitForChild("PlayerGui")
+    end)()
+
+    local screenGui = parentGui:WaitForChild("Fluent", 2) or parentGui:FindFirstChild("Fluent")
+    if not screenGui then
+        for _, child in ipairs(parentGui:GetChildren()) do
+            if child:IsA("ScreenGui") and child.Name == "Fluent" then
+                screenGui = child
+                break
+            end
+        end
+    end
+
+    if screenGui then
+        local titleLabel = nil
+        for _, desc in ipairs(screenGui:GetDescendants()) do
+            if desc:IsA("TextLabel") and desc.Text == windowTitleText then
+                titleLabel = desc
+                break
+            end
+        end
+
+        if titleLabel then
+            local container = titleLabel.Parent
+            if container then
+                titleLabel.Visible = false
+
+                local logoImage = Instance.new("ImageLabel")
+                logoImage.Name = "AutomaHubLogo"
+                logoImage.Size = UDim2.fromOffset(24, 24)
+                logoImage.Position = UDim2.new(0, 16, 0.5, -12)
+                logoImage.BackgroundTransparency = 1
+                logoImage.Image = getAsset("Icon/logo.jpg")
+                logoImage.Parent = container
+
+                local newTitle = Instance.new("TextLabel")
+                newTitle.Name = "AutomaHubTitle"
+                newTitle.Size = UDim2.new(1, -60, 1, 0)
+                newTitle.Position = UDim2.new(0, 48, 0, 0)
+                newTitle.BackgroundTransparency = 1
+                newTitle.Text = "AutomaHub"
+                newTitle.TextColor3 = Color3.fromRGB(245, 245, 250)
+                newTitle.TextSize = 20
+                newTitle.TextXAlignment = Enum.TextXAlignment.Left
+
+                local fontFace
+                pcall(function()
+                    fontFace = Font.new("rbxgameasset://Fonts/HelloChristmas-1Ge70")
+                end)
+                if fontFace then
+                    newTitle.FontFace = fontFace
+                else
+                    newTitle.Font = Enum.Font.FredokaOne
+                end
+                newTitle.Parent = container
+            end
+        end
+    end
+end
 
 local Window = Fluent:CreateWindow({
     Title = "GUI",
@@ -26,60 +102,7 @@ local Window = Fluent:CreateWindow({
     MinimizeKey = Enum.KeyCode.LeftControl
 })
 
-local frame = Window.Frame
-local titleBar = frame and frame:FindFirstChild("TitleBar")
-if titleBar then
-    local titleLabel = titleBar:FindFirstChild("Title") :: TextLabel?
-    if titleLabel then titleLabel.Visible = false end
-    local subTitleLabel = titleBar:FindFirstChild("SubTitle") :: TextLabel?
-    if subTitleLabel then subTitleLabel.Visible = false end
-
-    local container = Instance.new("Frame")
-    container.Name = "CustomHeader"
-    container.Size = UDim2.new(1, -100, 1, 0)
-    container.Position = UDim2.new(0, 15, 0, 0)
-    container.BackgroundTransparency = 1
-    container.Parent = titleBar
-
-    local logo = Instance.new("ImageLabel")
-    logo.Name = "Logo"
-    logo.Size = UDim2.fromOffset(24, 24)
-    logo.Position = UDim2.new(0, 0, 0.5, -12)
-    logo.BackgroundTransparency = 1
-    logo.Image = isfile and isfile("AutomaHub/Icon/logo.jpg") and getcustomasset("AutomaHub/Icon/logo.jpg") or "rbxassetid://10842426365"
-    logo.Parent = container
-
-    local customFont = (function()
-        local paths = {
-            "Hello-chrismast/Hello-chrismast.ttf",
-            "Hello-chrismast/Hello-chrismast.otf",
-            "Hello-chrismast/font.ttf",
-            "Hello-chrismast/font.otf",
-            "AutomaHub/Hello-chrismast/Hello-chrismast.ttf",
-            "AutomaHub/Hello-chrismast/font.ttf"
-        }
-        if isfile and getcustomasset then
-            for _, path in paths do
-                if isfile(path) then
-                    return Font.new(getcustomasset(path))
-                end
-            end
-        end
-        return Font.fromEnum(Enum.Font.GothamBold)
-    end)()
-
-    local nameLabel = Instance.new("TextLabel")
-    nameLabel.Name = "NameLabel"
-    nameLabel.Size = UDim2.new(1, -30, 1, 0)
-    nameLabel.Position = UDim2.new(0, 32, 0, 0)
-    nameLabel.BackgroundTransparency = 1
-    nameLabel.Text = "AutomaHub"
-    nameLabel.TextColor3 = Color3.fromRGB(245, 245, 250)
-    nameLabel.TextSize = 20
-    nameLabel.TextXAlignment = Enum.TextXAlignment.Left
-    nameLabel.FontFace = customFont
-    nameLabel.Parent = container
-end
+customizeTitle("GUI")
 
 local Tabs = {
     Main = Window:AddTab({ Title = "Main", Icon = "" })
