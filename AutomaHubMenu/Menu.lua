@@ -51,15 +51,34 @@ if (getcustomasset or getsynasset) and writefile then
     end
 end
 
-local Window = Fluent:CreateWindow({
-    Title = "AutomaHub",
-    SubTitle = "",
-    TabWidth = isMobile and 120 or 160,
-    Size = isMobile and UDim2.fromOffset(480, 360) or UDim2.fromOffset(580, 460),
-    Acrylic = true,
-    Theme = "Charcoal",
-    MinimizeKey = Enum.KeyCode.RightAlt
-})
+local originalMouseBehavior = UserInputService.MouseBehavior
+local originalMouseIcon = UserInputService.MouseIconEnabled
+
+local function unlockMouse()
+    UserInputService.MouseBehavior = Enum.MouseBehavior.Default
+    UserInputService.MouseIconEnabled = true
+end
+
+local function restoreMouse()
+    UserInputService.MouseBehavior = originalMouseBehavior
+    UserInputService.MouseIconEnabled = originalMouseIcon
+end
+
+-- Unlock mouse when the UI is visible, restore when minimized/closed
+Window:GetPropertyChangedSignal("Minimized"):Connect(function()
+    if not Window.Minimized then
+        unlockMouse()
+    else
+        restoreMouse()
+    end
+end)
+
+-- Ensure correct state on script start
+if not Window.Minimized then
+    unlockMouse()
+else
+    restoreMouse()
+end
 
 -- ponytail: add logo, bold, and add glitch effect to title text
 for _, desc in ipairs(Window.Root:GetDescendants()) do
