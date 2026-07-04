@@ -396,218 +396,86 @@ if KillerTeam then
     KillerTeam.PlayerRemoved:Connect(hookKillerAnimators)
 end
 
--- ============================================================
--- AUTO SKILLCHECK
--- ============================================================
--- ponytail: optimized references, no Tween 0 duration, throttled GUI search
-
-local CONFIG = {
-	enabled      = false,
-	toggleKey    = Enum.KeyCode.K,
-	zoneMin      = 102,
-	zoneMax      = 116,
-	zoneCenter   = 108,
-	cleanupDelay = 0.15,
-	showButton   = false,
-}
-
-local autoSkillCheckEnabled = CONFIG.enabled
+-- =====================================================================
+-- AUTO SKILLCHECK MODULE
+-- =====================================================================
+local autoSkillCheckEnabled = false
 local scTriggered = false
-local skillCheckPromptGui: ScreenGui? = nil
-local SkillCheckFrame: Frame? = nil
-local SkillCheckLine: Frame? = nil
-local SkillCheckGoal: Frame? = nil
-local SkillCheckResultEvent: RemoteEvent? = nil
-local SkillCheckEvent: RemoteEvent? = nil
-local generatorModel: Instance? = nil
-local generatorPoint: any = nil
+local scFrame: GuiObject?, scLine: GuiObject?, scGoal: GuiObject?
+local scResultEvent: RemoteEvent?, scEvent: RemoteEvent?
+local genModel, genPoint
 
-local function resolveSkillCheckRefs(): boolean
-	if SkillCheckFrame and SkillCheckLine and SkillCheckGoal and SkillCheckFrame.Parent then
-		return true
-	end
-	local gui = skillCheckPromptGui or PlayerGui:FindFirstChild("SkillCheckPromptGui") :: ScreenGui?
-	if not gui then return false end
-	skillCheckPromptGui = gui
-
-	local check = gui:FindFirstChild("Check") :: Frame?
-	if not check then
-		SkillCheckFrame, SkillCheckLine, SkillCheckGoal = nil, nil, nil
-		return false
-	end
-	SkillCheckFrame = check
-	SkillCheckLine  = check:FindFirstChild("Line") :: Frame?
-	SkillCheckGoal  = check:FindFirstChild("Goal") :: Frame?
-	return (SkillCheckLine ~= nil and SkillCheckGoal ~= nil)
+local function resolveSkillCheckRefs()
+    local gui = LocalPlayer:FindFirstChild("PlayerGui")
+    local promptGui = gui and gui:FindFirstChild("SkillCheckPromptGui")
+    local check = promptGui and promptGui:FindFirstChild("Check")
+    if check then
+        scFrame = check :: GuiObject
+        scLine = check:FindFirstChild("Line") :: GuiObject
+        scGoal = check:FindFirstChild("Goal") :: GuiObject
+    else
+        scFrame, scLine, scGoal = nil, nil, nil
+    end
 end
-
-PlayerGui.ChildAdded:Connect(function(child)
-	if child.Name == "SkillCheckPromptGui" then
-		skillCheckPromptGui = child :: ScreenGui
-		resolveSkillCheckRefs()
-	end
-end)
 
 local function resolveGeneratorRemotes()
-	local ok, genFolder = pcall(function()
-		return ReplicatedStorage:WaitForChild("Remotes", 10):WaitForChild("Generator", 10)
-	end)
-	if ok and genFolder then
-		SkillCheckResultEvent = genFolder:FindFirstChild("SkillCheckResultEvent") :: RemoteEvent?
-		SkillCheckEvent       = genFolder:FindFirstChild("SkillCheckEvent") :: RemoteEvent?
-		if SkillCheckEvent then
-			SkillCheckEvent.OnClientEvent:Connect(function(gm: Instance?, gp: any)
-				generatorModel, generatorPoint = gm, gp
-			end)
-		end
-	end
+    task.spawn(function()
+        local remotes = ReplicatedStorage:WaitForChild("Remotes", 5)
+        local genFolder = remotes and remotes:WaitForChild("Generator", 5)
+        if genFolder then
+            scResultEvent = genFolder:FindFirstChild("SkillCheckResultEvent") :: RemoteEvent
+            scEvent = genFolder:FindFirstChild("SkillCheckEvent") :: RemoteEvent
+            if scEvent then
+                scEvent.OnClientEvent:Connect(function(m, p) genModel = m; genPoint = p end)
+            end
+        end
+    end)
 end
-
-local function freezeNeedle(frozenRot: number)
-	pcall(function()
-		if SkillCheckLine then SkillCheckLine.Rotation = frozenRot end
-	end)
-end
-
-local function disableGameScriptAndSfx(): any
-	local char = LocalPlayer.Character
-	local scr = char and char:FindFirstChild("Skillcheck-gen") :: any
-	if scr then
-		pcall(function() scr.Disabled = true end)
-		local great = scr:FindFirstChild("Great") :: Sound?
-		if great then pcall(function() great:Play() end) end
-	end
-	return scr
-end
-
-local function fireSuccess()
-	if SkillCheckResultEvent and generatorModel and generatorPoint then
-		pcall(function()
-			SkillCheckResultEvent:FireServer("success", 1, generatorModel, generatorPoint)
-		end)
-	end
-end
-
-local function cleanupUI(scr: any)
-	task.delay(CONFIG.cleanupDelay, function()
-		pcall(function()
-			if SkillCheckFrame then SkillCheckFrame.Visible = false end
-			if SkillCheckLine  then SkillCheckLine.Rotation = 0 end
-			if SkillCheckGoal  then SkillCheckGoal.Rotation = 0 end
-		end)
-		if scr then pcall(function() scr.Disabled = false end) end
-	end)
-end
-
-local lastRefCheck = 0
-local function tick()
-	if not autoSkillCheckEnabled then scTriggered = false return end
-	if not SkillCheckFrame or not SkillCheckFrame.Parent or not SkillCheckLine or not SkillCheckGoal then
-		local now = os.clock()
-		if now - lastRefCheck < 0.5 then return end
-		lastRefCheck = now
-		if not resolveSkillCheckRefs() then return end
-	end
-
-	local frame = SkillCheckFrame :: Frame
-	local line = SkillCheckLine :: Frame
-	local goal = SkillCheckGoal :: Frame
-
-	if not frame.Visible then
-		scTriggered = false
-		return
-	end
-	if scTriggered then return end
-
-	local rotation     = line.Rotation
-	local goalRotation = goal.Rotation
-	local minZone = CONFIG.zoneMin + goalRotation
-	local maxZone = CONFIG.zoneMax + goalRotation
-
-	if rotation >= minZone and rotation <= maxZone then
-		scTriggered = true
-		local frozenRot = CONFIG.zoneCenter + goalRotation
-		freezeNeedle(frozenRot)
-		local scr = disableGameScriptAndSfx()
-		fireSuccess()
-		cleanupUI(scr)
-	end
-end
-
-local function setEnabled(state: boolean)
-	if autoSkillCheckEnabled == state then return end
-	autoSkillCheckEnabled = state
-	if not autoSkillCheckEnabled then scTriggered = false end
-	getgenv().AutoSkillCheckEnabled = autoSkillCheckEnabled
-	print("[SkillCheck] Auto Skillcheck: " .. (autoSkillCheckEnabled and "ON" or "OFF"))
-	
-	local side = getgenv().SkillCheckSide
-	if side and side.OnChanged then
-		pcall(side.OnChanged, autoSkillCheckEnabled)
-	end
-end
-
-local function toggle() setEnabled(not autoSkillCheckEnabled) end
-
-local SkillCheckSide = {
-	setEnabled = setEnabled,
-	toggle     = toggle,
-	isEnabled  = function() return autoSkillCheckEnabled end,
-	OnChanged  = nil :: ((boolean) -> ())?
-}
-getgenv().SkillCheckSide = SkillCheckSide
-
-UserInputService.InputBegan:Connect(function(input, gp)
-	if gp then return end
-	if input.KeyCode == CONFIG.toggleKey then toggle() end
-end)
-
-local function buildButton()
-	if not CONFIG.showButton then return end
-	local sg = Instance.new("ScreenGui")
-	sg.Name = "SkillCheckSideGui"
-	sg.ResetOnSpawn = false
-	sg.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
-	pcall(function() sg.Parent = (gethui and gethui()) or PlayerGui end)
-	if not sg.Parent then sg.Parent = PlayerGui end
-
-	local btn = Instance.new("TextButton")
-	btn.Name = "Toggle"
-	btn.Size = UDim2.new(0, 160, 0, 40)
-	btn.Position = UDim2.new(0, 20, 0.5, -20)
-	btn.BackgroundColor3 = Color3.fromRGB(30, 30, 35)
-	btn.BackgroundTransparency = 0.15
-	btn.BorderSizePixel = 0
-	btn.Font = Enum.Font.GothamBold
-	btn.TextSize = 14
-	btn.TextColor3 = Color3.fromRGB(235, 235, 235)
-	btn.Text = "Auto Skillcheck: OFF"
-	btn.AutoButtonColor = true
-	btn.Parent = sg
-
-	local corner = Instance.new("UICorner")
-	corner.CornerRadius = UDim.new(0, 8)
-	corner.Parent = btn
-
-	local stroke = Instance.new("UIStroke")
-	stroke.Color = Color3.fromRGB(90, 90, 110)
-	stroke.Thickness = 1
-	stroke.Parent = btn
-
-	local function refresh()
-		btn.Text = "Auto Skillcheck: " .. (autoSkillCheckEnabled and "ON" or "OFF")
-		stroke.Color = autoSkillCheckEnabled and Color3.fromRGB(80, 200, 120) or Color3.fromRGB(90, 90, 110)
-	end
-	btn.MouseButton1Click:Connect(function() toggle() refresh() end)
-	task.spawn(function()
-		while sg.Parent do refresh() task.wait(0.3) end
-	end)
-end
-
-resolveSkillCheckRefs()
 resolveGeneratorRemotes()
-buildButton()
-RunService.Heartbeat:Connect(tick)
+
+RunService.Heartbeat:Connect(function()
+    if not autoSkillCheckEnabled then
+        if scTriggered then scTriggered = false end
+        return
+    end
+
+    if not scFrame or not scFrame.Parent then resolveSkillCheckRefs() end
+    if not scFrame or not scFrame.Visible or not scLine or not scGoal then
+        if scTriggered then scTriggered = false end
+        return
+    end
+
+    if scTriggered then return end
+
+    local rot = scLine.Rotation
+    local goalRot = scGoal.Rotation
+    
+    if rot >= goalRot + 102 and rot <= goalRot + 116 then
+        scTriggered = true
+
+        pcall(function() scLine.Rotation = goalRot + 108 end)
+
+        local scr = Character and Character:FindFirstChild("Skillcheck-gen") :: Script?
+        if scr then
+            pcall(function() scr.Disabled = true end)
+            local great = scr:FindFirstChild("Great") :: Sound?
+            if great then pcall(function() great:Play() end) end
+        end
+
+        if scResultEvent and genModel and genPoint then
+            pcall(function() scResultEvent:FireServer("success", 1, genModel, genPoint) end)
+        end
+
+        task.delay(0.15, function()
+            pcall(function()
+                if scFrame then scFrame.Visible = false end
+                if scLine then scLine.Rotation = 0 end
+                if scGoal then scGoal.Rotation = 0 end
+            end)
+            if scr then pcall(function() scr.Disabled = false end) end
+        end)
+    end
+end)
 
 -- =====================================================================
 -- VISUAL (ESP) MODULE
@@ -1055,11 +923,10 @@ local Logic = {
             dodgeDistance = dist
         end,
         SetAutoSkillCheck = function(enabled: boolean)
-            setEnabled(enabled)
+            autoSkillCheckEnabled = enabled
         end
     },
-    ESP = ESP,
-    SkillCheckSide = getgenv().SkillCheckSide
+    ESP = ESP
 }
 
 getgenv().AutomaHubLogic = Logic
