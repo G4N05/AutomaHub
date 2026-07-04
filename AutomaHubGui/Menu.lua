@@ -38,7 +38,7 @@ if not Window then
 end
 
 local Tabs = {
-    Main = Window:Tab({ Title = "Main", Icon = "home" }),
+    Main = Window:Tab({ Title = "Main", Icon = "house" }),
     Combat = Window:Tab({ Title = "Combat", Icon = "swords" }),
     Visuals = Window:Tab({ Title = "Visuals", Icon = "eye" })
 }
