@@ -143,10 +143,20 @@ if Combat then
         end
     })
 
+    Tabs.Combat:AddToggle("AutoSkillcheckToggle", {
+        Title = "Auto Skillcheck",
+        Description = "Automatically hit perfect skillchecks",
+        Default = false,
+        Callback = function(Value: boolean)
+            Combat.SetAutoSkillcheck(Value)
+        end
+    })
+
     -- Apply defaults to Logic immediately (so values are correct even before user touches sliders)
     Combat.SetParryDistance(9)
     Combat.SetDashParryDistance(30)
     Combat.SetDodgeDistance(25)
+    Combat.SetAutoSkillcheck(false)
 else
     warn("[AutomaHub] Failed to load Combat module!")
 end

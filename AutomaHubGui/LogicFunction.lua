@@ -396,6 +396,110 @@ if KillerTeam then
     KillerTeam.PlayerRemoved:Connect(hookKillerAnimators)
 end
 
+
+-- =====================================================================
+-- AUTO SKILLCHECK MODULE
+-- =====================================================================
+local autoSkillcheckEnabled = false
+local scTriggered = false
+local SkillCheckResultEvent, SkillCheckEvent = nil, nil
+local generatorModel, generatorPoint = nil, nil
+
+local CONFIG_SC = {
+    zoneMin      = 102,
+    zoneMax      = 116,
+    zoneCenter   = 108,
+    cleanupDelay = 0.15,
+}
+
+local function resolveGeneratorRemotes()
+    local ok, genFolder = pcall(function()
+        return ReplicatedStorage:WaitForChild("Remotes", 5):WaitForChild("Generator", 5)
+    end)
+    if ok and genFolder then
+        SkillCheckResultEvent = genFolder:FindFirstChild("SkillCheckResultEvent")
+        SkillCheckEvent       = genFolder:FindFirstChild("SkillCheckEvent")
+        if SkillCheckEvent then
+            SkillCheckEvent.OnClientEvent:Connect(function(gm, gp)
+                generatorModel, generatorPoint = gm, gp
+            end)
+        end
+    end
+end
+
+local function doSkillcheckSuccess(line, goal)
+    scTriggered = true
+    
+    local frozenRot = CONFIG_SC.zoneCenter + goal.Rotation
+    pcall(function()
+        local TweenService = game:GetService("TweenService")
+        TweenService:Create(line, TweenInfo.new(0), { Rotation = frozenRot }):Play()
+        line.Rotation = frozenRot
+    end)
+
+    local char = LocalPlayer.Character
+    local scr = char and char:FindFirstChild("Skillcheck-gen")
+    if scr then
+        pcall(function() scr.Disabled = true end)
+        local great = scr:FindFirstChild("Great")
+        if great then pcall(function() great:Play() end) end
+    end
+
+    if SkillCheckResultEvent and generatorModel and generatorPoint then
+        pcall(function()
+            SkillCheckResultEvent:FireServer("success", 1, generatorModel, generatorPoint)
+        end)
+    end
+
+    task.delay(CONFIG_SC.cleanupDelay, function()
+        pcall(function()
+            local PlayerGui = LocalPlayer:FindFirstChild("PlayerGui")
+            local gui = PlayerGui and PlayerGui:FindFirstChild("SkillCheckPromptGui")
+            if gui then
+                local check = gui:FindFirstChild("Check")
+                if check then check.Visible = false end
+            end
+            line.Rotation = 0
+            goal.Rotation = 0
+        end)
+        if scr then pcall(function() scr.Disabled = false end) end
+    end)
+end
+
+RunService.Heartbeat:Connect(function()
+    if not autoSkillcheckEnabled then return end
+
+    local PlayerGui = LocalPlayer:FindFirstChild("PlayerGui")
+    local gui = PlayerGui and PlayerGui:FindFirstChild("SkillCheckPromptGui")
+    if not gui then 
+        scTriggered = false
+        return 
+    end
+
+    local check = gui:FindFirstChild("Check")
+    if not check or not check.Visible then
+        scTriggered = false
+        return
+    end
+
+    if scTriggered then return end
+
+    local line = check:FindFirstChild("Line")
+    local goal = check:FindFirstChild("Goal")
+    if not line or not goal then return end
+
+    local rotation = line.Rotation
+    local goalRotation = goal.Rotation
+    local minZone = CONFIG_SC.zoneMin + goalRotation
+    local maxZone = CONFIG_SC.zoneMax + goalRotation
+
+    if rotation >= minZone and rotation <= maxZone then
+        doSkillcheckSuccess(line, goal)
+    end
+end)
+
+task.spawn(resolveGeneratorRemotes)
+
 -- =====================================================================
 -- VISUAL (ESP) MODULE
 -- =====================================================================
@@ -840,6 +944,9 @@ local Logic = {
         end,
         SetDodgeDistance = function(dist: number)
             dodgeDistance = dist
+        end,
+        SetAutoSkillcheck = function(enabled: boolean)
+            autoSkillcheckEnabled = enabled
         end
     },
     ESP = ESP
