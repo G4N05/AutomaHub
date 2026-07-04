@@ -2,13 +2,16 @@
 
 local Theme = {}
 
-function Theme.Init(Fluent: any, Tab: any): any
+function Theme.Init(WindUI: any, Tab: any): any
     return Tab:AddDropdown("ThemeDropdown", {
         Title = "Theme",
-        Values = { "AMOLED", "Charcoal", "Midnight Blue", "Blood Red", "Pearl White" },
-        Default = "Charcoal",
+        Description = "Change the UI color scheme",
+        Values = { "Dark", "Light", "Amethyst", "Rose", "Mocha" },
+        Default = "Dark",
         Callback = function(Value: string)
-            Fluent:SetTheme(Value)
+            if WindUI and WindUI.SetTheme then
+                WindUI:SetTheme(Value)
+            end
         end
     })
 end
