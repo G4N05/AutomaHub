@@ -1,4 +1,17 @@
---!strict
+-- Clean up previous instance if running again (Script Refresh)
+if getgenv().Window then
+    pcall(function()
+        getgenv().Window:Destroy()
+    end)
+    getgenv().Window = nil
+end
+
+if getgenv().AutomaHubConnection then
+    pcall(function()
+        getgenv().AutomaHubConnection:Disconnect()
+    end)
+    getgenv().AutomaHubConnection = nil
+end
 
 local WindUI = loadstring(game:HttpGet("https://raw.githubusercontent.com/Footagesus/WindUI/main/dist/main.lua"))() :: any
 getgenv().WindUI = WindUI
@@ -51,7 +64,7 @@ getgenv().Window = Window
 
 -- PC shortcut: Alt + Right Arrow to toggle UI visibility
 local UserInputService = game:GetService("UserInputService")
-UserInputService.InputBegan:Connect(function(input, gameProcessed)
+getgenv().AutomaHubConnection = UserInputService.InputBegan:Connect(function(input, gameProcessed)
     if gameProcessed then return end
     -- PC: Alt + Right Arrow
     if input.KeyCode == Enum.KeyCode.Right and input:IsModifierPressed(Enum.ModifierKey.Alt) then
