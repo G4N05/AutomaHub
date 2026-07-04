@@ -29,13 +29,14 @@ local Window = WindUI:CreateWindow({
     Size = UDim2.fromOffset(580, 460),
     NewElements = true,
     HideSearchBar = false,
+    ToggleKey = Enum.KeyCode.RightAlt,
     OpenButton = {
         Title = "Open AutomaHub",
         CornerRadius = UDim.new(1, 0),
         StrokeThickness = 2,
         Enabled = true,
         Draggable = true,
-        OnlyMobile = false,
+        OnlyMobile = true,
         Scale = 0.5,
         Color = ColorSequence.new(
             Color3.fromHex("#30FF6A"),
