@@ -39,8 +39,8 @@ end)()
 local Combat = Logic and Logic.Combat
 
 -- Create Tabs
-local CombatTab = Window:Tab({ Title = "Combat", Icon = "swords" })
 local ThemeTab = Window:Tab({ Title = "Theme", Icon = "palette" })
+local CombatTab = Window:Tab({ Title = "Combat", Icon = "swords" })
 
 -- Combat Tab Sections (Tidied and organized)
 local ParrySection = CombatTab:Section({ Title = "Auto Parry Settings" })
