@@ -33,9 +33,9 @@ local Window = WindUI:CreateWindow({
         Title = "Open AutomaHub",
         CornerRadius = UDim.new(1, 0),
         StrokeThickness = 2,
-        Enabled = true,        -- Enable WindUI's native open button
+        Enabled = true,
         Draggable = true,
-        OnlyMobile = true,     -- Only show on mobile devices
+        OnlyMobile = false,
         Scale = 0.5,
         Color = ColorSequence.new(
             Color3.fromHex("#30FF6A"),
@@ -48,6 +48,3 @@ local Window = WindUI:CreateWindow({
     },
 })
 getgenv().Window = Window
-
--- Set native PC toggle keybind to RightAlt
-Window:SetToggleKey(Enum.KeyCode.RightAlt)
