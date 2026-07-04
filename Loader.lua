@@ -8,8 +8,7 @@ local function fetchScript(path: string): any
     if isfile and isfile(path) then
         return loadstring(readfile(path))()
     end
-    local url = baseUrl .. path .. "?t=" .. tostring(os.time())
-    return loadstring(game:HttpGet(url))()
+    return loadstring(game:HttpGet(baseUrl .. path))()
 end
 
 local successLoader, Loader = pcall(fetchScript, "Load.lua")

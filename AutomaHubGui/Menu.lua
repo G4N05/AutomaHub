@@ -37,11 +37,8 @@ if not Window then
     return
 end
 
--- Use custom logo asset as Main tab icon if available, otherwise fallback to "home"
-local mainIcon = getgenv().AutomaHubIcon or "home"
-
 local Tabs = {
-    Main = Window:Tab({ Title = "Main", Icon = mainIcon })
+    Main = Window:Tab({ Title = "Main", Icon = "home" })
 }
 
 -- Init Theme in Main tab
