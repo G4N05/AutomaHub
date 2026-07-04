@@ -29,13 +29,14 @@ local Window = WindUI:CreateWindow({
     Size = UDim2.fromOffset(580, 460),
     NewElements = true,
     HideSearchBar = false,
+    ToggleKey = Enum.KeyCode.RightAlt,
     OpenButton = {
         Title = "Open AutomaHub",
         CornerRadius = UDim.new(1, 0),
         StrokeThickness = 2,
         Enabled = true,
         Draggable = true,
-        OnlyMobile = false,
+        OnlyMobile = true,
         Scale = 0.5,
         Color = ColorSequence.new(
             Color3.fromHex("#30FF6A"),
@@ -48,23 +49,3 @@ local Window = WindUI:CreateWindow({
     },
 })
 getgenv().Window = Window
-
--- PC shortcut: Alt + Right Arrow to toggle UI visibility
-local UserInputService = game:GetService("UserInputService")
-UserInputService.InputBegan:Connect(function(input, gameProcessed)
-    if gameProcessed then return end
-    -- PC: Alt + Right Arrow
-    if input.KeyCode == Enum.KeyCode.Right and input:IsModifierPressed(Enum.ModifierKey.Alt) then
-        local win = getgenv().Window
-        if win then
-            win.Visible = not win.Visible
-        end
-    end
-    -- Mobile: Single tap anywhere to toggle UI
-    if input.UserInputType == Enum.UserInputType.Touch then
-        local win = getgenv().Window
-        if win then
-            win.Visible = not win.Visible
-        end
-    end
-end)
