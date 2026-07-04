@@ -37,10 +37,11 @@ if not Window then
     return
 end
 
+-- Use custom logo asset as Main tab icon if available, otherwise fallback to "home"
+local mainIcon = getgenv().AutomaHubIcon or "home"
+
 local Tabs = {
-    Main = Window:Tab({ Title = "Main", Icon = "house" }),
-    Combat = Window:Tab({ Title = "Combat", Icon = "swords" }),
-    Visuals = Window:Tab({ Title = "Visuals", Icon = "eye" })
+    Main = Window:Tab({ Title = "Main", Icon = mainIcon })
 }
 
 -- Init Theme in Main tab
@@ -49,81 +50,3 @@ if Theme and typeof(Theme) == "table" and typeof(Theme.Init) == "function" then
 else
     warn("[AutomaHub] Failed to load Theme module!")
 end
-
--- Init Combat Controls in Combat tab (Mocked/No Logic Sync yet)
-Tabs.Combat:Toggle({
-    Title = "Auto Parry",
-    Desc = "Automatically parry killer attacks",
-    Value = false,
-    Callback = function(Value: boolean)
-        print("Auto Parry toggled:", Value)
-    end
-})
-
-Tabs.Combat:Slider({
-    Title = "Parry Distance",
-    Range = {5, 25},
-    Value = 9,
-    Increment = 1,
-    Callback = function(Value: number)
-        print("Parry Distance set to:", Value)
-    end
-})
-
-Tabs.Combat:Slider({
-    Title = "Dash Parry Distance",
-    Range = {20, 50},
-    Value = 30,
-    Increment = 1,
-    Callback = function(Value: number)
-        print("Dash Parry Distance set to:", Value)
-    end
-})
-
-Tabs.Combat:Toggle({
-    Title = "Dodge Hidden (Abyss)",
-    Desc = "Automatically dodge Abysswalker skills",
-    Value = false,
-    Callback = function(Value: boolean)
-        print("Dodge Hidden toggled:", Value)
-    end
-})
-
-Tabs.Combat:Slider({
-    Title = "Dodge Distance",
-    Range = {15, 35},
-    Value = 25,
-    Increment = 1,
-    Callback = function(Value: number)
-        print("Dodge Distance set to:", Value)
-    end
-})
-
-Tabs.Combat:Toggle({
-    Title = "Auto Skillcheck",
-    Desc = "Automatically hit perfect skillchecks",
-    Value = false,
-    Callback = function(Value: boolean)
-        print("Auto Skillcheck toggled:", Value)
-    end
-})
-
--- Init Visuals Controls in Visuals tab (Mocked/No Logic Sync yet)
-Tabs.Visuals:Toggle({
-    Title = "Enable ESP",
-    Desc = "Master toggle to activate/deactivate ESP",
-    Value = false,
-    Callback = function(Value: boolean)
-        print("Enable ESP toggled:", Value)
-    end
-})
-
-Tabs.Visuals:Dropdown({
-    Title = "Choose ESP",
-    Values = { "Player", "Generator", "Pallet", "SCP / Zombie" },
-    Value = {},
-    Multi = true,
-    Callback = function(Value: any)
-        print("Choose ESP changed:", table.concat(Value, ", "))
-    end
-})

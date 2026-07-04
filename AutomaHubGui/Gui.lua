@@ -19,6 +19,7 @@ if (getcustomasset or getsynasset) and writefile then
         if ok and res then asset = res end
     end
 end
+getgenv().AutomaHubIcon = asset
 
 local Window = WindUI:CreateWindow({
     Title = "AutomaHub",
