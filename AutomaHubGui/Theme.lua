@@ -3,15 +3,18 @@
 local Theme = {}
 
 function Theme.Init(WindUI: any, Tab: any): any
-    return Tab:AddDropdown("ThemeDropdown", {
+    local themes = {}
+    for themeName, _ in pairs(WindUI:GetThemes()) do
+        table.insert(themes, themeName)
+    end
+    table.sort(themes)
+
+    return Tab:Dropdown({
         Title = "Theme",
-        Description = "Change the UI color scheme",
-        Values = { "Dark", "Light", "Amethyst", "Rose", "Mocha" },
-        Default = "Dark",
+        Values = themes,
+        Value = WindUI:GetCurrentTheme(),
         Callback = function(Value: string)
-            if WindUI and WindUI.SetTheme then
-                WindUI:SetTheme(Value)
-            end
+            WindUI:SetTheme(Value)
         end
     })
 end

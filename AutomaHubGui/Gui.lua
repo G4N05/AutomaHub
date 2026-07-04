@@ -4,19 +4,6 @@ local WindUI = loadstring(game:HttpGet("https://github.com/Footagesus/WindUI/rel
 
 getgenv().WindUI = WindUI
 
-local Window = WindUI:CreateWindow({
-    Title = "AutomaHub",
-    Icon = "swords", 
-    Author = "G4N05",
-    Folder = "AutomaHubConfig",
-    Size = UDim2.fromOffset(580, 460),
-    Transparent = true,
-    Theme = "Dark",
-    SideBarWidth = 170,
-    HasOutline = true
-})
-getgenv().Window = Window
-
 local UserInputService = game:GetService("UserInputService")
 local isMobile = UserInputService.TouchEnabled and not UserInputService.KeyboardEnabled
 
@@ -37,48 +24,17 @@ if (getcustomasset or getsynasset) and writefile then
     end
 end
 
--- ponytail: add logo and glitch effect to title text
-if Window and Window.Instance then
-    for _, desc in ipairs(Window.Instance:GetDescendants()) do
-        if desc:IsA("TextLabel") and desc.Text == "AutomaHub" then
-            local label = desc :: TextLabel
-            label.Font = Enum.Font.GothamBold
-            
-            -- Wind UI handles icon placement differently, but we can override it if we want
-            local originalPos = label.Position
-            local originalText = label.Text
-            local chars = {"#", "@", "$", "%", "*", "!", "?", "0", "1"}
-            
-            -- Glitch effect loop
-            task.spawn(function()
-                local rng = Random.new()
-                
-                while label and label.Parent do
-                    task.wait(rng:NextNumber(0.08, 0.45))
-                    if not (label and label.Parent) then break end
-                    
-                    if rng:NextNumber() < 0.35 then
-                        local dx = rng:NextInteger(-2, 2)
-                        local dy = rng:NextInteger(-1, 1)
-                        label.Position = originalPos + UDim2.fromOffset(dx, dy)
-                        
-                        if rng:NextNumber() < 0.5 then
-                            local len = string.len(originalText)
-                            local idx = rng:NextInteger(1, len)
-                            label.Text = string.sub(originalText, 1, idx - 1) .. chars[rng:NextInteger(1, #chars)] .. string.sub(originalText, idx + 1)
-                        end
-                        
-                        task.wait(rng:NextNumber(0.02, 0.08))
-                        if not (label and label.Parent) then break end
-                        label.Position = originalPos
-                        label.Text = originalText
-                    end
-                end
-            end)
-            break
-        end
-    end
-end
+local Window = WindUI:CreateWindow({
+    Title = "AutomaHub",
+    Icon = asset,
+    Author = "G4N05",
+    Folder = "AutomaHub",
+    Theme = "Dark",
+    Size = UDim2.fromOffset(580, 460),
+    Transparent = true,
+    ToggleKey = Enum.KeyCode.RightAlt
+})
+getgenv().Window = Window
 
 -- ponytail: simple draggable mobile toggle button
 local parentGui = (function()
@@ -115,11 +71,11 @@ stroke.Thickness = 2
 stroke.Color = Color3.fromRGB(60, 60, 65)
 stroke.Parent = btn
 
--- Wind UI doesn't have an explicit minimize function in the early docs, but usually destroying/recreating or just toggling UI visibility works.
--- Most modern UIs hide when you press a key bind. We'll simulate a keybind press or hide the window instance.
 btn.MouseButton1Click:Connect(function()
-    if Window and Window.Instance then
-        Window.Instance.Enabled = not Window.Instance.Enabled
+    if Window.ToggleMinimize then
+        Window:ToggleMinimize()
+    elseif Window.Minimize then
+        Window:Minimize()
     end
 end)
 
