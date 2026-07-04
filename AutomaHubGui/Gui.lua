@@ -27,18 +27,35 @@ end
 local WindUI = loadstring(game:HttpGet("https://raw.githubusercontent.com/Footagesus/WindUI/main/dist/main.lua"))() :: any
 getgenv().WindUI = WindUI
 
--- Get logo asset ID (works on all platforms)
 local LOGO_ASSET_ID = "rbxassetid://89249705975584"
 local asset = LOGO_ASSET_ID
 if (getcustomasset or getsynasset) and writefile then
     local logoPath = "AutomaHub/Icon/logo.jpg"
-    if isfile and not isfile(logoPath) then
+    
+    local isLogoFolder = false
+    if isfolder then
+        pcall(function() isLogoFolder = isfolder(logoPath) end)
+    end
+    if isLogoFolder and delfolder then
+        pcall(delfolder, logoPath)
+    end
+
+    local isLogoFile = false
+    if isfile then
+        pcall(function() isLogoFile = isfile(logoPath) end)
+    end
+
+    if not isLogoFile then
         pcall(makefolder, "AutomaHub")
         pcall(makefolder, "AutomaHub/Icon")
         local ok, content = pcall(game.HttpGet, game, "https://raw.githubusercontent.com/G4N05/AutomaHub/main/Icon/logo.jpg")
-        if ok and content then pcall(writefile, logoPath, content) end
+        if ok and content then 
+            pcall(writefile, logoPath, content) 
+            pcall(function() isLogoFile = isfile(logoPath) end)
+        end
     end
-    if isfile and isfile(logoPath) then
+    
+    if isLogoFile then
         local ok, res = pcall((getcustomasset or getsynasset), logoPath)
         if ok and res then asset = res end
     end
