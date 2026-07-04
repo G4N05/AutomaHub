@@ -2,7 +2,7 @@
 
 local WindUI = getgenv().WindUI
 
--- ponytail: require, readfile, or HTTP fallback for Theme module
+-- ponytail: require or readfile for Theme module (strictly local)
 local Theme = (function()
     local themeScript = typeof(script) == "Instance" and script.Parent and script.Parent:FindFirstChild("Theme")
     if themeScript and themeScript:IsA("ModuleScript") then
@@ -10,18 +10,14 @@ local Theme = (function()
         if success then return module end
     end
     
-    local ok, fileContent = pcall(readfile, "AutomaHub/AutomaHubGui/Theme.lua")
-    if ok then
-        local loader, err = loadstring(fileContent)
-        if loader then
-            local success, module = pcall(loader)
-            if success and module then return module end
-        end
+    local ok, fileContent = pcall(readfile, "AutomaHubGui/Theme.lua")
+    if not ok then
+        -- Fallback if executed from inside AutomaHubGui directory
+        ok, fileContent = pcall(readfile, "Theme.lua")
     end
     
-    local ok2, remoteContent = pcall(game.HttpGet, game, "https://raw.githubusercontent.com/G4N05/AutomaHub/main/AutomaHubGui/Theme.lua")
-    if ok2 then
-        local loader, err = loadstring(remoteContent)
+    if ok then
+        local loader, err = loadstring(fileContent)
         if loader then
             local success, module = pcall(loader)
             if success and module then return module end
