@@ -5,7 +5,10 @@ local baseUrl = "https://raw.githubusercontent.com/G4N05/AutomaHub/main/"
 getgenv().AutomaHubLoaderModule = true
 
 local function fetchScript(path: string): any
-    return loadstring(readfile(path))()
+    if isfile and isfile(path) then
+        return loadstring(readfile(path))()
+    end
+    return loadstring(game:HttpGet(baseUrl .. path))()
 end
 
 local successLoader, Loader = pcall(fetchScript, "Load.lua")
