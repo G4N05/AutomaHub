@@ -210,12 +210,12 @@ local function doParryPress()
 end
 
 local function attemptParry(maxRange: number)
-    if not autoParryEnabled then warn("[AutomaHub Debug] AutoParry disabled") return end
-    if killerDistance > maxRange then warn("[AutomaHub Debug] Out of range:", killerDistance, ">", maxRange) return end
-    if not canParry() then warn("[AutomaHub Debug] canParry() is false. CD:", isOnCooldown, "Silenced:", isSilenced) return end
-    if (os.clock() - lastPrePress) < rearmCooldown then warn("[AutomaHub Debug] Rearm cooldown active") return end
-    if not hasLineOfSight() then warn("[AutomaHub Debug] No line of sight") return end
-    if not isKillerFacing() then warn("[AutomaHub Debug] Killer not facing") return end
+    if not autoParryEnabled then warn("[AutomaHub Debug] AutoParry disabled"); return end
+    if killerDistance > maxRange then warn("[AutomaHub Debug] Out of range:", killerDistance, ">", maxRange); return end
+    if not canParry() then warn("[AutomaHub Debug] canParry() is false. CD:", isOnCooldown, "Silenced:", isSilenced); return end
+    if (os.clock() - lastPrePress) < rearmCooldown then warn("[AutomaHub Debug] Rearm cooldown active"); return end
+    if not hasLineOfSight() then warn("[AutomaHub Debug] No line of sight"); return end
+    if not isKillerFacing() then warn("[AutomaHub Debug] Killer not facing"); return end
     
     warn("[AutomaHub Debug] attemptParry PASSED ALL CHECKS, calling doParryPress()")
     doParryPress()
@@ -353,7 +353,7 @@ local function doCrouch()
     end)
 end
 
-LocalPlayer.CharacterAdded:Connect(function() crouchController = nil isDodging = false end)
+LocalPlayer.CharacterAdded:Connect(function() crouchController = nil; isDodging = false end)
 
 local function triggerDodge()
     if not autoDodgeEnabled or isDodging then return end
