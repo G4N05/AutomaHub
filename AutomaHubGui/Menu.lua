@@ -74,7 +74,8 @@ local Tabs = {
     Main = Window:AddTab({ Title = "Main", Icon = "home" }),
     Combat = Window:AddTab({ Title = "Combat", Icon = "swords" }),
     Visuals = Window:AddTab({ Title = "Visuals", Icon = "eye" }),
-    Aim = Window:AddTab({ Title = "Aim", Icon = "crosshair" })
+    GunAim = Window:AddTab({ Title = "Gun Aim", Icon = "crosshair" }),
+    VeilAim = Window:AddTab({ Title = "Veil Aim", Icon = "crosshair" })
 }
 
 -- Init Theme in Main tab
@@ -189,16 +190,13 @@ else
 end
 
 -- =====================================================================
--- Init Aim Controls in Aim tab (GunAim + VeilAim sections)
+-- Init Aim Controls (Separate Tabs: Gun Aim & Veil Aim)
 -- =====================================================================
 local GunAim = Logic and Logic.GunAim
 local VeilAim = Logic and Logic.VeilAim
 
 if GunAim then
-    -- ── GunAim Section ──
-    Tabs.Aim:AddSection("GunAim")
-
-    Tabs.Aim:AddToggle("GunAimLockToggle", {
+    Tabs.GunAim:AddToggle("GunAimLockToggle", {
         Title = "Aim Lock",
         Description = "Lock camera to target while holding gun",
         Default = false,
@@ -207,7 +205,7 @@ if GunAim then
         end
     })
 
-    Tabs.Aim:AddToggle("GunSilentAimToggle", {
+    Tabs.GunAim:AddToggle("GunSilentAimToggle", {
         Title = "Silent Aim",
         Description = "Redirect bullets to target (server-side)",
         Default = false,
@@ -216,7 +214,7 @@ if GunAim then
         end
     })
 
-    Tabs.Aim:AddToggle("GunShowPovToggle", {
+    Tabs.GunAim:AddToggle("GunShowPovToggle", {
         Title = "Show POV",
         Description = "Show FOV circle on screen",
         Default = false,
@@ -225,7 +223,7 @@ if GunAim then
         end
     })
 
-    Tabs.Aim:AddSlider("GunAimOffset", {
+    Tabs.GunAim:AddSlider("GunAimOffset", {
         Title = "Aim Offset",
         Description = "Vertical offset for aim point",
         Default = 0,
@@ -238,7 +236,7 @@ if GunAim then
         end
     })
 
-    Tabs.Aim:AddSlider("GunPovSize", {
+    Tabs.GunAim:AddSlider("GunPovSize", {
         Title = "POV Size",
         Description = "FOV circle radius (pixels)",
         Default = 120,
@@ -256,9 +254,7 @@ end
 
 if VeilAim then
     -- ── VeilAim Section ──
-    Tabs.Aim:AddSection("VeilAim")
-
-    Tabs.Aim:AddToggle("VeilAimLockToggle", {
+    Tabs.VeilAim:AddToggle("VeilAimLockToggle", {
         Title = "Aim Lock",
         Description = "Lock camera to target while in throw stance",
         Default = false,
@@ -267,7 +263,7 @@ if VeilAim then
         end
     })
 
-    Tabs.Aim:AddToggle("VeilSilentAimToggle", {
+    Tabs.VeilAim:AddToggle("VeilSilentAimToggle", {
         Title = "Silent Aim",
         Description = "Redirect spear to target (server-side)",
         Default = false,
@@ -276,7 +272,7 @@ if VeilAim then
         end
     })
 
-    Tabs.Aim:AddToggle("VeilShowPovToggle", {
+    Tabs.VeilAim:AddToggle("VeilShowPovToggle", {
         Title = "Show POV",
         Description = "Show FOV circle on screen",
         Default = false,
@@ -285,7 +281,7 @@ if VeilAim then
         end
     })
 
-    Tabs.Aim:AddSlider("VeilAimOffset", {
+    Tabs.VeilAim:AddSlider("VeilAimOffset", {
         Title = "Aim Offset",
         Description = "Vertical offset for aim point",
         Default = 0,
@@ -298,7 +294,7 @@ if VeilAim then
         end
     })
 
-    Tabs.Aim:AddSlider("VeilPovSize", {
+    Tabs.VeilAim:AddSlider("VeilPovSize", {
         Title = "POV Size",
         Description = "FOV circle radius (pixels)",
         Default = 150,
@@ -312,7 +308,7 @@ if VeilAim then
     })
 
     -- ── Veil Distance Offset Sliders ──
-    Tabs.Aim:AddSection("Veil Distance Offsets")
+    Tabs.VeilAim:AddSection("Veil Distance Offsets")
 
     local veilOffsetSliders: { any } = {}
 
@@ -325,7 +321,7 @@ if VeilAim then
 
         local offsets = VeilAim.GetDistOffsets()
         for i, entry in ipairs(offsets) do
-            local distSlider = Tabs.Aim:AddSlider("VeilDistSlider_" .. i, {
+            local distSlider = Tabs.VeilAim:AddSlider("VeilDistSlider_" .. i, {
                 Title = "Distance #" .. i .. " (" .. entry.dist .. "u)",
                 Description = "Lead offset multiplier at " .. entry.dist .. " studs",
                 Default = entry.offset,
@@ -343,7 +339,7 @@ if VeilAim then
 
     rebuildVeilOffsetSliders()
 
-    Tabs.Aim:AddButton({
+    Tabs.VeilAim:AddButton({
         Title = "+ Add Offset Entry",
         Description = "Add a new distance offset entry",
         Callback = function()
@@ -352,7 +348,7 @@ if VeilAim then
         end
     })
 
-    Tabs.Aim:AddButton({
+    Tabs.VeilAim:AddButton({
         Title = "- Remove Last Entry",
         Description = "Remove the last distance offset entry",
         Callback = function()
