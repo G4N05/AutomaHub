@@ -47,5 +47,12 @@ local Window = WindUI:CreateWindow({
         Height = 44,
         ButtonsType = "Default",
     },
+    User = {
+        Enabled = true,
+        Anonymous = false,
+        Callback = function()
+            -- profile click callback
+        end
+    },
 })
 getgenv().Window = Window
