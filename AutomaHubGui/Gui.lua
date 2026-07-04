@@ -44,7 +44,7 @@ local Window = WindUI:CreateWindow({
     },
     Topbar = {
         Height = 44,
-        ButtonsType = "Mac",
+        ButtonsType = "Default",
     },
 })
 getgenv().Window = Window
