@@ -37,9 +37,4 @@ local Tabs = {
     Theme = Window:Tab({ Title = "Theme", Icon = "palette" })
 }
 
--- Init Theme in Theme tab
-if Theme and typeof(Theme) == "table" and typeof(Theme.Init) == "function" then
-    Theme.Init(WindUI, Tabs.Theme)
-else
-    warn("[AutomaHub] Failed to load Theme module!")
-end
+-- Theme tab is kept empty for now

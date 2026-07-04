@@ -33,6 +33,18 @@ if (getcustomasset or getsynasset) and writefile then
     end
 end
 
+WindUI:AddTheme({
+    Name = "Crimson",
+    Accent = Color3.fromHex("#DC2626"),
+    Background = Color3.fromHex("#1A0B0B"),
+    Dialog = Color3.fromHex("#261010"),
+    Outline = Color3.fromHex("#3D1C1C"),
+    Text = Color3.fromHex("#FFF1F1"),
+    Placeholder = Color3.fromHex("#997A7A"),
+    Button = Color3.fromHex("#2C1212"),
+    Icon = Color3.fromHex("#FCA5A5")
+})
+
 local Window = WindUI:CreateWindow({
     Title = "AutomaHub",
     Author = "by G4N05",
