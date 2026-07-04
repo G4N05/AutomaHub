@@ -57,9 +57,7 @@ ParrySection:Toggle({
 
 ParrySection:Slider({
     Title = "Parry Distance",
-    Range = {5, 25},
-    Value = 9,
-    Increment = 1,
+    Value = { Min = 5, Max = 25, Default = 9 },
     Callback = function(value: number)
         if Combat and Combat.SetParryDistance then
             Combat.SetParryDistance(value)
@@ -69,9 +67,7 @@ ParrySection:Slider({
 
 ParrySection:Slider({
     Title = "Dash Parry Distance",
-    Range = {20, 50},
-    Value = 30,
-    Increment = 1,
+    Value = { Min = 20, Max = 50, Default = 30 },
     Callback = function(value: number)
         if Combat and Combat.SetDashParryDistance then
             Combat.SetDashParryDistance(value)
@@ -93,9 +89,7 @@ DodgeSection:Toggle({
 
 DodgeSection:Slider({
     Title = "Dodge Distance",
-    Range = {15, 35},
-    Value = 25,
-    Increment = 1,
+    Value = { Min = 15, Max = 35, Default = 25 },
     Callback = function(value: number)
         if Combat and Combat.SetDodgeDistance then
             Combat.SetDodgeDistance(value)
