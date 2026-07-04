@@ -143,15 +143,6 @@ if Combat then
         end
     })
 
-    Tabs.Combat:AddToggle("AutoSkillCheckToggle", {
-        Title = "Auto Skillcheck",
-        Description = "Automatically hit Great skillchecks for generators",
-        Default = false,
-        Callback = function(Value: boolean)
-            Combat.SetAutoSkillCheck(Value)
-        end
-    })
-
     -- Apply defaults to Logic immediately (so values are correct even before user touches sliders)
     Combat.SetParryDistance(9)
     Combat.SetDashParryDistance(30)
