@@ -1,32 +1,4 @@
---!strict
-
 local WindUI = getgenv().WindUI
-
--- ponytail: require or readfile for Theme module (strictly local)
-local Theme = (function()
-    local themeScript = typeof(script) == "Instance" and script.Parent and script.Parent:FindFirstChild("Theme")
-    if themeScript and themeScript:IsA("ModuleScript") then
-        local success, module = pcall(require, themeScript)
-        if success then return module end
-    end
-    
-    local ok, fileContent = pcall(readfile, "AutomaHubGui/Theme.lua")
-    if not ok then
-        -- Fallback if executed from inside AutomaHubGui directory
-        ok, fileContent = pcall(readfile, "Theme.lua")
-    end
-    
-    if ok then
-        local loader, err = loadstring(fileContent)
-        if loader then
-            local success, module = pcall(loader)
-            if success and module then return module end
-        end
-    end
-    
-    return nil
-end)()
-
 local Window = getgenv().Window
 if not Window then
     warn("[AutomaHub] Window is not initialized yet!")
@@ -37,4 +9,18 @@ local Tabs = {
     Theme = Window:Tab({ Title = "Theme", Icon = "palette" })
 }
 
--- Theme tab is kept empty for now
+-- Populate and initialize Theme dropdown directly
+local themes = {}
+for themeName, _ in pairs(WindUI:GetThemes()) do
+    table.insert(themes, themeName)
+end
+table.sort(themes)
+
+Tabs.Theme:Dropdown({
+    Title = "Theme",
+    Values = themes,
+    Value = WindUI:GetCurrentTheme(),
+    Callback = function(Value: string)
+        WindUI:SetTheme(Value)
+    end
+})
