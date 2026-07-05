@@ -697,13 +697,13 @@ local function startGenerator()
             hookRemoval(d, "Generator")
         end
     end
-    local gf = Map:FindFirstChild("Generators") or Map
-    pushConn("Generator", gf.ChildAdded:Connect(function(child)
-        if isKindActive("Generator") and child:IsA("Model") and string.find(string.lower(child.Name), "generator") then
+    -- ponytail: use DescendantAdded to avoid replication race conditions where folders don't exist yet
+    pushConn("Generator", Map.DescendantAdded:Connect(function(desc)
+        if isKindActive("Generator") and desc:IsA("Model") and string.find(string.lower(desc.Name), "generator") then
             task.defer(function()
-                if isKindActive("Generator") and child.Parent and not tracked[child] then
-                    applyGen(child)
-                    hookRemoval(child, "Generator")
+                if isKindActive("Generator") and desc.Parent and not tracked[desc] then
+                    applyGen(desc)
+                    hookRemoval(desc, "Generator")
                 end
             end)
         end
@@ -753,15 +753,15 @@ local function startPallet()
             end
         end
     end
-    local pf = Map:FindFirstChild("Pallets") or Map
-    pushConn("Pallet", pf.ChildAdded:Connect(function(child)
-        if isKindActive("Pallet") and child:IsA("Model") then
-            local nm = string.lower(child.Name)
+    -- ponytail: use DescendantAdded to avoid replication race conditions where folders don't exist yet
+    pushConn("Pallet", Map.DescendantAdded:Connect(function(desc)
+        if isKindActive("Pallet") and desc:IsA("Model") then
+            local nm = string.lower(desc.Name)
             if string.find(nm, "pallet") and not string.find(nm, "crate") then
                 task.defer(function()
-                    if isKindActive("Pallet") and child.Parent and not tracked[child] then
-                        applyPallet(child)
-                        hookRemoval(child, "Pallet")
+                    if isKindActive("Pallet") and desc.Parent and not tracked[desc] then
+                        applyPallet(desc)
+                        hookRemoval(desc, "Pallet")
                     end
                 end)
             end
@@ -885,6 +885,20 @@ local starters = {
     Pallet = startPallet,
     SCP = startZombie
 }
+
+-- ponytail: listen for when the map spawns (e.g. entering game from lobby) and re-initialize ESPs
+Workspace.ChildAdded:Connect(function(child)
+    if child.Name == "Map" then
+        task.defer(function()
+            for kind, active in pairs(activeKinds) do
+                if active then
+                    stopKind(kind)
+                    starters[kind]()
+                end
+            end
+        end)
+    end
+end)
 
 function ESP.UpdateStates()
     for _, kind in ipairs({"Generator", "Pallet", "SCP", "Player"}) do
