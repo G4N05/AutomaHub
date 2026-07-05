@@ -37,10 +37,12 @@ local Logic = (function()
 end)()
 
 local Combat = Logic and Logic.Combat
+local ESP = Logic and Logic.ESP
 
 -- Create Tabs
 local ThemeTab = Window:Tab({ Title = "Theme", Icon = "palette" })
 local CombatTab = Window:Tab({ Title = "Combat", Icon = "swords" })
+local VisualTab = Window:Tab({ Title = "Visual", Icon = "eye" })
 
 -- Combat Tab Sections (Tidied and organized)
 local ParrySection = CombatTab:Section({ Title = "Auto Parry Settings" })
@@ -105,6 +107,32 @@ SkillcheckSection:Toggle({
     Callback = function(value: boolean)
         if Combat and Combat.SetAutoSkillcheck then
             Combat.SetAutoSkillcheck(value)
+        end
+    end
+})
+
+-- Visual Tab (ESP Settings)
+local ESPSection = VisualTab:Section({ Title = "ESP Settings" })
+ESPSection:Toggle({
+    Title = "ESP",
+    Desc = "Enable ESP visuals",
+    Value = false,
+    Callback = function(value: boolean)
+        if ESP and ESP.SetMasterEnabled then
+            ESP.SetMasterEnabled(value)
+        end
+    end
+})
+
+ESPSection:Dropdown({
+    Title = "Select Esp",
+    Desc = "Choose which ESP elements to display",
+    Values = { "Player", "Generator", "Pallet", "Zombie" },
+    Value = {},
+    Multi = true,
+    Callback = function(values: { string })
+        if ESP and ESP.SetSelectedKinds then
+            ESP.SetSelectedKinds(values)
         end
     end
 })
