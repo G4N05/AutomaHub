@@ -43,6 +43,7 @@ local ESP = Logic and Logic.ESP
 local ThemeTab = Window:Tab({ Title = "Theme", Icon = "palette" })
 local CombatTab = Window:Tab({ Title = "Combat", Icon = "swords" })
 local VisualTab = Window:Tab({ Title = "Visual", Icon = "eye" })
+local AimTab = Window:Tab({ Title = "Aim", Icon = "crosshair" })
 
 -- Combat Tab Sections (Tidied and organized)
 local ParrySection = CombatTab:Section({ Title = "Auto Parry Settings" })
@@ -136,6 +137,74 @@ ESPSection:Dropdown({
         end
     end
 })
+
+-- Aim Tab (Sub-tabs: Aim Veil on the left, Aim Gun on the right)
+local AimGunSection = AimTab:Section({ Title = "Aim Gun Settings" })
+local AimVeilSection = AimTab:Section({ Title = "Aim Veil Settings" })
+
+-- Placeholder UI elements for the sub-tabs
+AimGunSection:Toggle({
+    Title = "Silent Aim (Gun)",
+    Value = false,
+    Callback = function(value: boolean)
+        -- No logic yet
+    end
+})
+
+AimVeilSection:Toggle({
+    Title = "Silent Aim (Veil)",
+    Value = false,
+    Callback = function(value: boolean)
+        -- No logic yet
+    end
+})
+
+-- Helper to toggle Section visibility
+local function setSectionVisible(section: any, visible: boolean)
+    if not section then return end
+    local obj = section.Object or section.Frame or section.Container
+    if obj then
+        obj.Visible = visible
+    end
+end
+
+-- Active state
+local activeSubTab = "Aim Gun"
+local function updateSubTabs()
+    setSectionVisible(AimGunSection, activeSubTab == "Aim Gun")
+    setSectionVisible(AimVeilSection, activeSubTab == "Aim Veil")
+end
+
+local SwitcherSection = AimTab:Section({ Title = "Select Category" })
+
+-- Try to use HStack/Group layout if supported, fallback to vertical buttons
+local container = SwitcherSection
+pcall(function()
+    local stack = SwitcherSection.HStack and SwitcherSection:HStack() or SwitcherSection:Group()
+    if stack then container = stack end
+end)
+
+container:Button({
+    Title = "Aim Veil",
+    Callback = function()
+        activeSubTab = "Aim Veil"
+        updateSubTabs()
+    end
+})
+
+container:Button({
+    Title = "Aim Gun",
+    Callback = function()
+        activeSubTab = "Aim Gun"
+        updateSubTabs()
+    end
+})
+
+-- Default to Aim Gun and update initial visibility
+task.spawn(function()
+    task.wait(0.1)
+    updateSubTabs()
+end)
 
 -- Theme Tab (Dropdown selection)
 local themes = {}
