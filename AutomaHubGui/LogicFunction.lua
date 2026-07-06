@@ -948,6 +948,201 @@ local CONFIG = {
     aimLock         = true,
     aimWallcheck    = true,
     aimEnableLead   = true,
+    -- ponytail: use DescendantAdded to avoid replication race conditions where folders don't exist yet
+    pushConn("Pallet", Map.DescendantAdded:Connect(function(desc)
+        if isKindActive("Pallet") and desc:IsA("Model") then
+            local nm = string.lower(desc.Name)
+            if string.find(nm, "pallet") and not string.find(nm, "crate") then
+                task.defer(function()
+                    if isKindActive("Pallet") and desc.Parent and not tracked[desc] then
+                        applyPallet(desc)
+                        hookRemoval(desc, "Pallet")
+                    end
+                end)
+            end
+        end
+    end))
+    ensureDistLoop()
+end
+
+-- SCP / Zombie ESP
+local function anchorZombie(model: Model): BasePart?
+    local hrp = model:FindFirstChild("HumanoidRootPart") or model:FindFirstChild("Torso") or model:FindFirstChild("Head")
+    if hrp and hrp:IsA("BasePart") then return hrp :: BasePart end
+    return model:FindFirstChildWhichIsA("BasePart") :: BasePart?
+end
+
+local function isZombie(m: Instance): boolean
+    return m:IsA("Model") and m:FindFirstChildOfClass("Humanoid") ~= nil and Players:GetPlayerFromCharacter(m :: Model) == nil
+end
+
+local function applyZombie(model: Model)
+    if tracked[model] then return end
+    local anchor = anchorZombie(model)
+    if not anchor then return end
+    local nameLower = string.lower(model.Name)
+    local labelText = string.find(nameLower, "scp") and "Zombie" or model.Name
+    local hl = mkHighlight(model, COLOR_ZOMBIE)
+    local bill, _, sub = mkBillboard(anchor, COLOR_ZOMBIE, labelText)
+    tracked[model] = { hl = hl, bill = bill, anchor = anchor, sub = sub, wantDist = true, kind = "SCP" }
+end
+
+local function startZombie()
+    local Map = Workspace:FindFirstChild("Map")
+    if not Map then return end
+    for _, d in ipairs(Map:GetDescendants()) do
+        if isZombie(d) then
+            applyZombie(d :: Model)
+            hookRemoval(d, "SCP")
+        end
+    end
+    pushConn("SCP", Map.DescendantAdded:Connect(function(desc)
+        if isKindActive("SCP") and desc:IsA("Model") then
+            task.defer(function()
+                if isKindActive("SCP") and desc.Parent and not tracked[desc] and isZombie(desc) then
+                    applyZombie(desc :: Model)
+                    hookRemoval(desc, "SCP")
+                end
+            end)
+        end
+    end))
+    ensureDistLoop()
+end
+
+-- Player ESP
+local function anchorPlayer(char: Model): BasePart?
+    local hrp = char:FindFirstChild("HumanoidRootPart") or char:FindFirstChild("Head")
+    if hrp and hrp:IsA("BasePart") then return hrp :: BasePart end
+    return char:FindFirstChildWhichIsA("BasePart") :: BasePart?
+end
+
+local function playerColor(plr: Player): Color3
+    local tm = plr.Team
+    if tm and (string.find(string.lower(tm.Name), "killer") or string.find(string.lower(tm.Name), "hunter")) then
+        return COLOR_KILLER
+    end
+    if plr:GetAttribute("Role") == "Killer" or plr:GetAttribute("Killer") then
+        return COLOR_KILLER
+    end
+    return COLOR_PLAYER
+end
+
+local function recolorPlayer(plr: Player)
+    local char = plr.Character
+    local t = char and tracked[char]
+    if not t then return end
+    local col = playerColor(plr)
+    if t.hl then
+        t.hl.FillColor = col
+        t.hl.OutlineColor = col
+    end
+    if t.nameL then t.nameL.TextColor3 = col end
+end
+
+local function applyPlayer(char: Model, plr: Player)
+    if tracked[char] then return end
+    local anchor = anchorPlayer(char)
+    if not anchor then return end
+    local col = playerColor(plr)
+    local hl = mkHighlight(char, col)
+    local bill, nameL, sub = mkBillboard(anchor, col, plr.Name)
+    tracked[char] = { hl = hl, bill = bill, anchor = anchor, sub = sub, nameL = nameL, wantDist = true, kind = "Player" }
+end
+
+local function startPlayer()
+    local function setup(plr: Player)
+        if plr == LocalPlayer then return end
+        local function onChar(char: Model)
+            task.defer(function()
+                if isKindActive("Player") and char.Parent and not tracked[char] then
+                    applyPlayer(char, plr)
+                    pushConn("Player", char.AncestryChanged:Connect(function(_, parent)
+                        if not parent then cleanup(char) end
+                    end))
+                end
+            end)
+        end
+        if plr.Character then onChar(plr.Character) end
+        pushConn("Player", plr.CharacterAdded:Connect(onChar))
+        pushConn("Player", plr:GetPropertyChangedSignal("Team"):Connect(function() recolorPlayer(plr) end))
+    end
+    
+    for _, plr in ipairs(Players:GetPlayers()) do setup(plr) end
+    pushConn("Player", Players.PlayerAdded:Connect(function(plr)
+        if isKindActive("Player") then setup(plr) end
+    end))
+    ensureDistLoop()
+end
+
+local starters = {
+    Player = startPlayer,
+    Generator = startGenerator,
+    Pallet = startPallet,
+    SCP = startZombie
+}
+
+-- ponytail: listen for when the map spawns (e.g. entering game from lobby) and re-initialize ESPs
+Workspace.ChildAdded:Connect(function(child)
+    if child.Name == "Map" then
+        task.defer(function()
+            for kind, active in pairs(activeKinds) do
+                if active then
+                    stopKind(kind)
+                    starters[kind]()
+                end
+            end
+        end)
+    end
+end)
+
+function ESP.UpdateStates()
+    for _, kind in ipairs({"Generator", "Pallet", "SCP", "Player"}) do
+        local shouldBeActive = espMasterEnabled and (selectedKinds[kind] == true)
+        if shouldBeActive ~= activeKinds[kind] then
+            activeKinds[kind] = shouldBeActive
+            if shouldBeActive then
+                starters[kind]()
+            else
+                stopKind(kind)
+            end
+        end
+    end
+end
+
+function ESP.SetMasterEnabled(enabled: boolean)
+    espMasterEnabled = enabled
+    ESP.UpdateStates()
+end
+
+function ESP.SetSelectedKinds(selected: any)
+    local newSelected: { [string]: boolean } = {
+        Generator = false,
+        Pallet = false,
+        SCP = false,
+        Player = false
+    }
+    if typeof(selected) == "table" then
+        for k, v in pairs(selected) do
+            if typeof(k) == "number" and typeof(v) == "string" then
+                if v == "SCP / Zombie" or v == "Zombie" then newSelected["SCP"] = true else newSelected[v] = true end
+            elseif typeof(k) == "string" and v == true then
+                if k == "SCP / Zombie" or k == "Zombie" then newSelected["SCP"] = true else newSelected[k] = true end
+            end
+        end
+    end
+    selectedKinds = newSelected
+    ESP.UpdateStates()
+end
+
+-- =====================================================================
+-- AIM MODULE (Twist of Fate - Aim Lock + Silent Aim)
+-- =====================================================================
+local CONFIG = {
+    aimTargetMode   = "Killer",
+    silentAimGun    = true,
+    aimLock         = true,
+    aimWallcheck    = true,
+    aimEnableLead   = true,
     aimFovRadius    = 120,
     aimLeadMult     = 1.0,
     aimSmooth       = 0.25,
@@ -958,8 +1153,6 @@ local CONFIG = {
     veilEnableLead  = true,
     veilFovRadius   = 150,
     veilShowFov     = false,
-    veilLeadMult    = 1.9,
-    veilMaxDist     = 40,
 }
 
 local silentSupported = (getrawmetatable ~= nil) and (getnamecallmethod ~= nil) and (newcclosure ~= nil)
@@ -1221,17 +1414,6 @@ local function initVeil()
         return plr and plr.Character and plr.Character:FindFirstChild(VEIL_TARGET_PART) 
     end
 
-    local function veilInRange(origin, targetPos, speed, g)
-        local disp = targetPos - origin
-        local dy = disp.Y
-        local flatX, flatZ = disp.X, disp.Z
-        local dx = math.sqrt(flatX * flatX + flatZ * flatZ)
-        if dx < 0.001 then return true end
-        local v2 = speed * speed
-        local root = v2 * v2 - g * (g * dx * dx + 2 * dy * v2)
-        return root >= 0
-    end
-
     local function veilGetTarget()
         local team = Teams:FindFirstChild("Survivors") if not team then return nil end
         local cam = Workspace.CurrentCamera 
@@ -1242,14 +1424,11 @@ local function initVeil()
             if plr ~= LocalPlayer then
                 local part = veilGetPart(plr)
                 if part then
-                    local physicalDist = (part.Position - origin).Magnitude
-                    if physicalDist <= CONFIG.veilMaxDist then
-                        local sp, onScreen = cam:WorldToViewportPoint(part.Position)
-                        if onScreen then
-                            local d = (Vector2.new(sp.X, sp.Y) - center).Magnitude
-                            if d <= bestDist and veilInRange(origin, part.Position, VEIL_AIM_LOCK_SPEED, VEIL_GRAVITY) then 
-                                best, bestDist = plr, d 
-                            end
+                    local sp, onScreen = cam:WorldToViewportPoint(part.Position)
+                    if onScreen then
+                        local d = (Vector2.new(sp.X, sp.Y) - center).Magnitude
+                        if d <= bestDist then 
+                            best, bestDist = plr, d 
                         end
                     end
                 end
@@ -1280,7 +1459,11 @@ local function initVeil()
     local function veilSolveLead(origin, targetPos, targetVel, speed, g)
         local pred = targetPos
         local applyLead = CONFIG.veilEnableLead and targetVel
-        local mult = applyLead and CONFIG.veilLeadMult or 0
+        local dist = (targetPos - origin).Magnitude
+        local mult = 0
+        if applyLead and dist >= 10 and dist <= 40 then
+            mult = 1.9
+        end
         local dir, tof
         for _ = 1, 3 do
             dir, tof = veilSolveBallistic(origin, pred, speed, g)
@@ -1435,12 +1618,6 @@ local Logic = {
         end,
         SetVeilFovRadius = function(radius: number)
             CONFIG.veilFovRadius = radius
-        end,
-        SetVeilPrediction = function(val: number)
-            CONFIG.veilLeadMult = val
-        end,
-        SetVeilDistance = function(dist: number)
-            CONFIG.veilMaxDist = dist
         end,
     }
 }

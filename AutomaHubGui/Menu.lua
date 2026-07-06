@@ -289,26 +289,6 @@ AimVeilSection:Toggle({
     end
 })
 
-AimVeilSection:Slider({
-    Title = "Prediction Offset",
-    Value = { Min = 0.1, Max = 5.0, Default = 1.9 },
-    Callback = function(value: number)
-        if Aim and Aim.SetVeilPrediction then
-            Aim.SetVeilPrediction(value)
-        end
-    end
-})
-
-AimVeilSection:Slider({
-    Title = "Distance",
-    Value = { Min = 10, Max = 40, Default = 40 },
-    Callback = function(value: number)
-        if Aim and Aim.SetVeilDistance then
-            Aim.SetVeilDistance(value)
-        end
-    end
-})
-
 -- Theme Tab (Dropdown selection)
 local themes = {}
 for name in pairs(WindUI:GetThemes()) do
