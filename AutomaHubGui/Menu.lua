@@ -231,6 +231,84 @@ AimSection:Slider({
     end
 })
 
+local AimVeilSection = AimTab:Section({ Title = "Aim Veil Settings" })
+
+AimVeilSection:Dropdown({
+    Title = "Aim Veil",
+    Desc = "Select Aim Veil mode",
+    Values = { "Disabled", "Silent Aim", "Aim Lock", "Both" },
+    Value = "Both",
+    Callback = function(value: string)
+        if Aim then
+            if value == "Disabled" then
+                Aim.SetVeilSilentAim(false)
+                Aim.SetVeilAimLock(false)
+            elseif value == "Silent Aim" then
+                Aim.SetVeilSilentAim(true)
+                Aim.SetVeilAimLock(false)
+            elseif value == "Aim Lock" then
+                Aim.SetVeilSilentAim(false)
+                Aim.SetVeilAimLock(true)
+            elseif value == "Both" then
+                Aim.SetVeilSilentAim(true)
+                Aim.SetVeilAimLock(true)
+            end
+        end
+    end
+})
+
+AimVeilSection:Toggle({
+    Title = "Show FOV",
+    Desc = "Show FOV circle",
+    Value = false,
+    Callback = function(value: boolean)
+        if Aim and Aim.SetVeilShowFov then
+            Aim.SetVeilShowFov(value)
+        end
+    end
+})
+
+AimVeilSection:Slider({
+    Title = "FOV Radius",
+    Value = { Min = 50, Max = 300, Default = 150 },
+    Callback = function(value: number)
+        if Aim and Aim.SetVeilFovRadius then
+            Aim.SetVeilFovRadius(value)
+        end
+    end
+})
+
+AimVeilSection:Toggle({
+    Title = "Predict Movement",
+    Desc = "Predict target movement trajectory",
+    Value = true,
+    Callback = function(value: boolean)
+        if Aim and Aim.SetVeilEnableLead then
+            Aim.SetVeilEnableLead(value)
+        end
+    end
+})
+
+AimVeilSection:Slider({
+    Title = "Prediction Offset",
+    Value = { Min = 0.1, Max = 5.0, Default = 1.9 },
+    Callback = function(value: number)
+        if Aim and Aim.SetVeilPrediction then
+            Aim.SetVeilPrediction(value)
+        end
+    end
+})
+
+AimVeilSection:Slider({
+    Title = "Distance",
+    Value = { Min = 10, Max = 40, Default = 40 },
+    Callback = function(value: number)
+        if Aim and Aim.SetVeilDistance then
+            Aim.SetVeilDistance(value)
+        end
+    end
+})
+
 -- Theme Tab (Dropdown selection)
 local themes = {}
 for name in pairs(WindUI:GetThemes()) do
