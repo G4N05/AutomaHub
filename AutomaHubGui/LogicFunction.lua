@@ -1,4 +1,4 @@
---!strict
+﻿--!strict
 
 -- Services
 local Players          = game:GetService("Players")
@@ -1191,6 +1191,224 @@ initTwistOfFate()
 installNamecallHook()
 
 -- =====================================================================
+-- AIM VEIL MODULE (Veil - Silent Aim + Aim Lock ballistic/spear)
+-- =====================================================================
+local VEIL_CONFIG = {
+    veilSilentAim  = true,
+    veilAimLock    = true,
+    veilEnableLead = true,
+    veilFovRadius  = 150,
+    veilShowFov    = false,
+    -- Offset presets per distance: { dist = studs, offset = lead_mult }
+    veilOffsets    = { { dist=40, offset=1.9 }, { dist=60, offset=1.4 }, { dist=80, offset=1.0 } },
+}
+
+local function initVeil()
+    local VEIL_TARGET_PART    = "HumanoidRootPart"
+    local VEIL_GRAVITY        = 98.1
+    local VEIL_AIM_SMOOTH     = 0.35
+    local VEIL_AIM_LOCK_SPEED = 165
+
+    local function veilOffsetForDist(dist)
+        local best, bestDiff = 1.0, math.huge
+        for _, e in ipairs(VEIL_CONFIG.veilOffsets) do
+            local diff = math.abs(dist - e.dist)
+            if diff < bestDiff then bestDiff = diff; best = e.offset end
+        end
+        return best
+    end
+
+    local veilTargetPos, veilTargetVel = nil, nil
+    local veilSampleName, veilSamplePos, veilSampleT = nil, nil, 0
+    local veilLockedPlayer, veilLockGraceUntil = nil, 0
+
+    local function veilGetFovCenter()
+        local vp = Workspace.CurrentCamera.ViewportSize
+        return Vector2.new(vp.X / 2, vp.Y / 2)
+    end
+
+    local function veilGetPart(plr)
+        return plr and plr.Character and plr.Character:FindFirstChild(VEIL_TARGET_PART)
+    end
+
+    local function veilInRange(origin, targetPos, speed, g)
+        local disp = targetPos - origin
+        local dy = disp.Y
+        local dx = math.sqrt(disp.X * disp.X + disp.Z * disp.Z)
+        if dx < 0.001 then return true end
+        local v2 = speed * speed
+        return (v2 * v2 - g * (g * dx * dx + 2 * dy * v2)) >= 0
+    end
+
+    local function veilGetTarget()
+        local team = Teams:FindFirstChild("Survivors")
+        if not team then return nil end
+        local cam = Workspace.CurrentCamera
+        local origin = cam.CFrame.Position
+        local center = veilGetFovCenter()
+        local best, bestDist = nil, VEIL_CONFIG.veilFovRadius
+        for _, plr in ipairs(team:GetPlayers()) do
+            if plr ~= LocalPlayer then
+                local part = veilGetPart(plr)
+                if part then
+                    local sp, onScreen = cam:WorldToViewportPoint(part.Position)
+                    if onScreen then
+                        local d = (Vector2.new(sp.X, sp.Y) - center).Magnitude
+                        if d <= bestDist and veilInRange(origin, part.Position, VEIL_AIM_LOCK_SPEED, VEIL_GRAVITY) then
+                            best, bestDist = plr, d
+                        end
+                    end
+                end
+            end
+        end
+        return best
+    end
+
+    local function veilSolveBallistic(origin, target, speed, g)
+        local disp = target - origin
+        local dy = disp.Y
+        local dx = math.sqrt(disp.X * disp.X + disp.Z * disp.Z)
+        if dx < 0.001 then return (disp.Magnitude > 0) and disp.Unit or nil, 0 end
+        local v2 = speed * speed
+        local root = v2 * v2 - g * (g * dx * dx + 2 * dy * v2)
+        local tanTheta = (root < 0) and 1 or ((v2 - math.sqrt(root)) / (g * dx))
+        local horiz = Vector3.new(disp.X / dx, 0, disp.Z / dx)
+        local dir = horiz + Vector3.new(0, tanTheta, 0)
+        if dir.Magnitude < 0.001 then return nil, 0 end
+        dir = dir.Unit
+        local cosTheta = math.sqrt(dir.X * dir.X + dir.Z * dir.Z)
+        local tof = (speed * cosTheta > 0.001) and (dx / (speed * cosTheta)) or 0
+        return dir, tof
+    end
+
+    local function veilSolveLead(origin, targetPos, targetVel, speed, g)
+        local pred = targetPos
+        local dist = (targetPos - origin).Magnitude
+        local applyLead = VEIL_CONFIG.veilEnableLead and targetVel
+        local mult = applyLead and veilOffsetForDist(dist) or 0
+        local dir, tof
+        for _ = 1, 3 do
+            dir, tof = veilSolveBallistic(origin, pred, speed, g)
+            if not dir then return nil end
+            if applyLead then pred = targetPos + targetVel * (tof * mult) end
+        end
+        return dir, tof
+    end
+
+    local veilFovCircle = nil
+    if Drawing then
+        veilFovCircle = Drawing.new("Circle")
+        veilFovCircle.Thickness = 2
+        veilFovCircle.NumSides = 64
+        veilFovCircle.Radius = VEIL_CONFIG.veilFovRadius
+        veilFovCircle.Filled = false
+        veilFovCircle.Visible = false
+        veilFovCircle.Color = Color3.fromRGB(255, 255, 255)
+    end
+
+    local veilRenderConn = RunService.RenderStepped:Connect(function()
+        if not (VEIL_CONFIG.veilSilentAim or VEIL_CONFIG.veilAimLock) then
+            veilTargetPos, veilTargetVel = nil, nil
+            veilSampleName, veilLockedPlayer = nil, nil
+            if veilFovCircle then veilFovCircle.Visible = false end
+            return
+        end
+        if veilFovCircle then
+            veilFovCircle.Visible = VEIL_CONFIG.veilShowFov
+            veilFovCircle.Radius = VEIL_CONFIG.veilFovRadius
+            veilFovCircle.Position = veilGetFovCenter()
+        end
+
+        local stanceChar = LocalPlayer.Character
+        local inThrowStance = stanceChar and stanceChar:GetAttribute("spearmode") == true
+        local target
+
+        if inThrowStance then
+            if not veilLockedPlayer then veilLockedPlayer = veilGetTarget() end
+            if not (veilLockedPlayer and veilLockedPlayer.Parent and veilGetPart(veilLockedPlayer)) then
+                veilLockedPlayer = veilGetTarget()
+            end
+            target = veilLockedPlayer
+            veilLockGraceUntil = tick() + 0.3
+        elseif veilLockedPlayer and tick() < veilLockGraceUntil and veilLockedPlayer.Parent and veilGetPart(veilLockedPlayer) then
+            target = veilLockedPlayer
+        else
+            veilLockedPlayer = nil
+            target = veilGetTarget()
+        end
+
+        if target then
+            local part = veilGetPart(target)
+            if part then
+                local pos = part.Position
+                local now = tick()
+                if veilSampleName == target.Name and veilSamplePos then
+                    local dt = now - veilSampleT
+                    if dt >= 0.04 then
+                        local instVel = (pos - veilSamplePos) / dt
+                        veilTargetVel = veilTargetVel and veilTargetVel:Lerp(instVel, 0.5) or instVel
+                        veilSamplePos = pos
+                        veilSampleT = now
+                    end
+                else
+                    veilSampleName = target.Name
+                    veilSamplePos = pos
+                    veilSampleT = now
+                    veilTargetVel = Vector3.zero
+                end
+                veilTargetPos = pos
+                if veilFovCircle then veilFovCircle.Color = Color3.fromRGB(255, 0, 0) end
+                if VEIL_CONFIG.veilAimLock and inThrowStance then
+                    local cam = Workspace.CurrentCamera
+                    local origin = cam.CFrame.Position
+                    local dir = veilSolveLead(origin, pos, veilTargetVel, VEIL_AIM_LOCK_SPEED, VEIL_GRAVITY)
+                    if dir then
+                        local goal = CFrame.new(origin, origin + dir)
+                        cam.CFrame = cam.CFrame:Lerp(goal, VEIL_AIM_SMOOTH)
+                    end
+                end
+            else
+                veilTargetPos, veilTargetVel = nil, nil
+                veilSampleName = nil
+            end
+        else
+            veilTargetPos, veilTargetVel = nil, nil
+            veilSampleName = nil
+            if veilFovCircle then veilFovCircle.Color = Color3.fromRGB(255, 255, 255) end
+        end
+    end)
+
+    -- ponytail: reuse shared namecall handler (onNamecall defined in AimGun section above)
+    onNamecall(function(self, method, ...)
+        if method == "FireServer" and VEIL_CONFIG.veilSilentAim and veilTargetPos and self.Name == "Spearthrow" then
+            local p = self.Parent
+            if p and p.Name == "Veil" then
+                local args = { ... }
+                local dirArg, speedArg, originArg = args[1], args[2], args[3]
+                if typeof(dirArg) == "Vector3" and type(speedArg) == "number" and typeof(originArg) == "Vector3" then
+                    local newDir = veilSolveLead(originArg, veilTargetPos, veilTargetVel, speedArg, VEIL_GRAVITY)
+                    if newDir then
+                        args[1] = newDir
+                        return true, callOriginal(self, unpack(args))
+                    end
+                end
+            end
+        end
+        return false
+    end)
+
+    if getgenv then
+        local g = getgenv()
+        if g.__tomaVeilRender then pcall(function() g.__tomaVeilRender:Disconnect() end) end
+        g.__tomaVeilRender = veilRenderConn
+        if g.__tomaVeilFov then pcall(function() g.__tomaVeilFov:Remove() end) end
+        g.__tomaVeilFov = veilFovCircle
+    end
+end
+
+initVeil()
+
+-- =====================================================================
 -- EXPORT COMBINED LOGIC MODULE
 -- =====================================================================
 local Logic = {
@@ -1240,10 +1458,31 @@ local Logic = {
         SetShowFov = function(enabled: boolean)
             CONFIG.aimShowFov = enabled
         end
+    },
+    Veil = {
+        SetSilentAim = function(enabled: boolean)
+            VEIL_CONFIG.veilSilentAim = enabled
+        end,
+        SetAimLock = function(enabled: boolean)
+            VEIL_CONFIG.veilAimLock = enabled
+        end,
+        SetEnableLead = function(enabled: boolean)
+            VEIL_CONFIG.veilEnableLead = enabled
+        end,
+        SetFovRadius = function(radius: number)
+            VEIL_CONFIG.veilFovRadius = radius
+        end,
+        SetShowFov = function(enabled: boolean)
+            VEIL_CONFIG.veilShowFov = enabled
+        end,
+        -- SetOffset(index, dist, offset_mult) — update one of 3 preset distance entries
+        SetOffset = function(index: number, dist: number, offset: number)
+            if VEIL_CONFIG.veilOffsets[index] then
+                VEIL_CONFIG.veilOffsets[index] = { dist = dist, offset = offset }
+            end
+        end,
     }
 }
 
 getgenv().AutomaHubLogic = Logic
 return Logic
-
-

@@ -37,14 +37,15 @@ local Logic = (function()
 end)()
 
 local Combat = Logic and Logic.Combat
-local ESP = Logic and Logic.ESP
-local Aim = Logic and Logic.Aim
+local ESP    = Logic and Logic.ESP
+local Aim    = Logic and Logic.Aim
+local Veil   = Logic and Logic.Veil
 
 -- Create Tabs
-local ThemeTab = Window:Tab({ Title = "Theme", Icon = "palette" })
-local CombatTab = Window:Tab({ Title = "Combat", Icon = "swords" })
-local VisualTab = Window:Tab({ Title = "Visual", Icon = "eye" })
-local AimTab = Window:Tab({ Title = "Aim", Icon = "crosshair" })
+local ThemeTab  = Window:Tab({ Title = "Theme",  Icon = "palette" })
+local CombatTab = Window:Tab({ Title = "Combat",  Icon = "swords" })
+local VisualTab = Window:Tab({ Title = "Visual",  Icon = "eye" })
+local AimTab    = Window:Tab({ Title = "Aim",     Icon = "crosshair" })
 
 -- Combat Tab Sections (Tidied and organized)
 local ParrySection = CombatTab:Section({ Title = "Auto Parry Settings" })
@@ -139,53 +140,39 @@ ESPSection:Dropdown({
     end
 })
 
--- Aim Tab (Aim Gun Settings)
-local AimSection = AimTab:Section({ Title = "Aim Gun Settings" })
+-- ══ Aim Tab ══════════════════════════════════════════════════
+
+-- ──── Section: Aim Gun (Twist of Fate) ────
+local AimSection = AimTab:Section({ Title = "Aim Gun  (Twist of Fate)" })
 
 AimSection:Dropdown({
     Title = "Aim Gun",
-    Desc = "Select Aim Gun mode",
+    Desc  = "Select Aim Gun mode",
     Values = { "Disabled", "Silent Aim", "Aim Lock", "Both" },
-    Value = "Both",
+    Value  = "Both",
     Callback = function(value: string)
-        if Aim then
-            if value == "Disabled" then
-                Aim.SetSilentAim(false)
-                Aim.SetAimLock(false)
-            elseif value == "Silent Aim" then
-                Aim.SetSilentAim(true)
-                Aim.SetAimLock(false)
-            elseif value == "Aim Lock" then
-                Aim.SetSilentAim(false)
-                Aim.SetAimLock(true)
-            elseif value == "Both" then
-                Aim.SetSilentAim(true)
-                Aim.SetAimLock(true)
-            end
-        end
+        if not Aim then return end
+        Aim.SetSilentAim(value == "Silent Aim" or value == "Both")
+        Aim.SetAimLock(value == "Aim Lock" or value == "Both")
     end
 })
 
 AimSection:Dropdown({
-    Title = "Aim Target",
-    Desc = "Target team selection",
+    Title  = "Aim Target",
+    Desc   = "Team to target",
     Values = { "Killer", "Survivor" },
-    Value = "Killer",
+    Value  = "Killer",
     Callback = function(value: string)
-        if Aim and Aim.SetTargetMode then
-            Aim.SetTargetMode(value)
-        end
+        if Aim then Aim.SetTargetMode(value) end
     end
 })
 
 AimSection:Toggle({
     Title = "Show FOV",
-    Desc = "Show FOV circle",
+    Desc  = "Show FOV ring on screen",
     Value = false,
     Callback = function(value: boolean)
-        if Aim and Aim.SetShowFov then
-            Aim.SetShowFov(value)
-        end
+        if Aim then Aim.SetShowFov(value) end
     end
 })
 
@@ -193,31 +180,25 @@ AimSection:Slider({
     Title = "FOV Radius",
     Value = { Min = 50, Max = 300, Default = 120 },
     Callback = function(value: number)
-        if Aim and Aim.SetFovRadius then
-            Aim.SetFovRadius(value)
-        end
+        if Aim then Aim.SetFovRadius(value) end
     end
 })
 
 AimSection:Toggle({
     Title = "Wallcheck",
-    Desc = "Aim only at visible targets",
+    Desc  = "Only aim at visible targets",
     Value = true,
     Callback = function(value: boolean)
-        if Aim and Aim.SetWallcheck then
-            Aim.SetWallcheck(value)
-        end
+        if Aim then Aim.SetWallcheck(value) end
     end
 })
 
 AimSection:Toggle({
     Title = "Predict Movement",
-    Desc = "Predict target movement trajectory",
+    Desc  = "Lead target trajectory",
     Value = true,
     Callback = function(value: boolean)
-        if Aim and Aim.SetEnableLead then
-            Aim.SetEnableLead(value)
-        end
+        if Aim then Aim.SetEnableLead(value) end
     end
 })
 
@@ -225,9 +206,80 @@ AimSection:Slider({
     Title = "Aim Smooth",
     Value = { Min = 0.05, Max = 1.0, Default = 0.25 },
     Callback = function(value: number)
-        if Aim and Aim.SetSmooth then
-            Aim.SetSmooth(value)
-        end
+        if Aim then Aim.SetSmooth(value) end
+    end
+})
+
+-- ──── Section: Aim Veil (Spear/Ballistic) ────
+local VeilSection = AimTab:Section({ Title = "Aim Veil  (Spear / Ballistic)" })
+
+VeilSection:Dropdown({
+    Title  = "Aim Veil",
+    Desc   = "Select Veil aim mode",
+    Values = { "Disabled", "Silent Aim", "Aim Lock", "Both" },
+    Value  = "Both",
+    Callback = function(value: string)
+        if not Veil then return end
+        Veil.SetSilentAim(value == "Silent Aim" or value == "Both")
+        Veil.SetAimLock(value == "Aim Lock" or value == "Both")
+    end
+})
+
+VeilSection:Toggle({
+    Title = "Show FOV",
+    Desc  = "Show Veil FOV ring on screen",
+    Value = false,
+    Callback = function(value: boolean)
+        if Veil then Veil.SetShowFov(value) end
+    end
+})
+
+VeilSection:Slider({
+    Title = "FOV Radius",
+    Value = { Min = 50, Max = 400, Default = 150 },
+    Callback = function(value: number)
+        if Veil then Veil.SetFovRadius(value) end
+    end
+})
+
+VeilSection:Toggle({
+    Title = "Predict Movement",
+    Desc  = "Lead spear trajectory based on distance offset",
+    Value = true,
+    Callback = function(value: boolean)
+        if Veil then Veil.SetEnableLead(value) end
+    end
+})
+
+-- ──── Section: Veil Offset Setting ────
+-- Offsets: { dist=studs, offset=lead_mult }
+-- Preset 1: close (~40 studs), Preset 2: mid (~60), Preset 3: far (~80)
+local OffsetSection = AimTab:Section({ Title = "Veil Offset Setting" })
+
+OffsetSection:Slider({
+    Title = "Close Range Offset (40 studs)",
+    Desc  = "Lead multiplier for close range",
+    Value = { Min = 0.5, Max = 3.0, Default = 1.9 },
+    Callback = function(value: number)
+        if Veil then Veil.SetOffset(1, 40, value) end
+    end
+})
+
+OffsetSection:Slider({
+    Title = "Mid Range Offset (60 studs)",
+    Desc  = "Lead multiplier for mid range",
+    Value = { Min = 0.5, Max = 3.0, Default = 1.4 },
+    Callback = function(value: number)
+        if Veil then Veil.SetOffset(2, 60, value) end
+    end
+})
+
+OffsetSection:Slider({
+    Title = "Far Range Offset (80 studs)",
+    Desc  = "Lead multiplier for far range",
+    Value = { Min = 0.5, Max = 3.0, Default = 1.0 },
+    Callback = function(value: number)
+        if Veil then Veil.SetOffset(3, 80, value) end
     end
 })
 
