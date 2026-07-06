@@ -231,8 +231,10 @@ AimSection:Slider({
     end
 })
 
--- Aim Veil Settings (Mirrors Aim Gun settings)
-AimSection:Dropdown({
+-- Aim Veil Settings
+local AimVeilSection = AimTab:Section({ Title = "Aim Veil Settings" })
+
+AimVeilSection:Dropdown({
     Title = "Aim Veil",
     Desc = "Select Aim Veil mode",
     Values = { "Disabled", "Silent Aim", "Aim Lock", "Both" },
@@ -256,7 +258,7 @@ AimSection:Dropdown({
     end
 })
 
-AimSection:Toggle({
+AimVeilSection:Toggle({
     Title = "Show FOV (Veil)",
     Desc = "Show FOV circle for Veil",
     Value = false,
@@ -267,7 +269,7 @@ AimSection:Toggle({
     end
 })
 
-AimSection:Slider({
+AimVeilSection:Slider({
     Title = "FOV Radius (Veil)",
     Value = { Min = 50, Max = 400, Default = 150 },
     Callback = function(value: number)
@@ -277,7 +279,7 @@ AimSection:Slider({
     end
 })
 
-AimSection:Toggle({
+AimVeilSection:Toggle({
     Title = "Predict Movement (Veil)",
     Desc = "Predict target movement trajectory for Veil",
     Value = true,
