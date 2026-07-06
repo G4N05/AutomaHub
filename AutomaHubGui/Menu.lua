@@ -38,11 +38,13 @@ end)()
 
 local Combat = Logic and Logic.Combat
 local ESP = Logic and Logic.ESP
+local Aim = Logic and Logic.Aim
 
 -- Create Tabs
 local ThemeTab = Window:Tab({ Title = "Theme", Icon = "palette" })
 local CombatTab = Window:Tab({ Title = "Combat", Icon = "swords" })
 local VisualTab = Window:Tab({ Title = "Visual", Icon = "eye" })
+local AimTab = Window:Tab({ Title = "Aim", Icon = "crosshair" })
 
 -- Combat Tab Sections (Tidied and organized)
 local ParrySection = CombatTab:Section({ Title = "Auto Parry Settings" })
@@ -133,6 +135,37 @@ ESPSection:Dropdown({
     Callback = function(values: { string })
         if ESP and ESP.SetSelectedKinds then
             ESP.SetSelectedKinds(values)
+        end
+    end
+})
+
+-- Aim Tab (Aim Settings)
+local AimSection = AimTab:Section({ Title = "Aim Gun Settings" })
+AimSection:Dropdown({
+    Title = "Aim Target",
+    Desc = "Choose who to target",
+    Values = { "Killer", "Survivor" },
+    Value = "Killer",
+    Callback = function(value: string)
+        if Aim and Aim.SetConfigValue then
+            Aim.SetConfigValue("aimTargetMode", value)
+        end
+    end
+})
+
+AimSection:Dropdown({
+    Title = "Aim Gun",
+    Desc = "Choose features to enable",
+    Values = { "Silent Aim", "Aim Lock", "Wallcheck", "Lead Prediction", "Show FOV" },
+    Value = { "Silent Aim", "Aim Lock", "Wallcheck", "Lead Prediction" },
+    Multi = true,
+    Callback = function(values: { string })
+        local selected = {}
+        for _, v in ipairs(values) do
+            selected[v] = true
+        end
+        if Aim and Aim.SetMultiConfig then
+            Aim.SetMultiConfig(selected)
         end
     end
 })
