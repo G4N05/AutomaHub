@@ -940,257 +940,6 @@ function ESP.SetSelectedKinds(selected: any)
 end
 
 -- =====================================================================
--- AIM MODULE (Twist of Fate - Aim Lock + Silent Aim)
--- =====================================================================
-local CONFIG = {
-    aimTargetMode   = "Killer",
-    silentAimGun    = true,
-    aimLock         = true,
-    aimWallcheck    = true,
-    aimEnableLead   = true,
-    aimFovRadius    = 120,
-    aimLeadMult     = 1.0,
-    aimSmooth       = 0.25,
-    aimShowFov      = false,
-}
-
-local silentSupported = (getrawmetatable ~= nil) and (getnamecallmethod ~= nil) and (newcclosure ~= nil)
-local namecallHandlers = {}
-local rawCall = nil
-
-local function onNamecall(fn) table.insert(namecallHandlers, fn) end
-local function callOriginal(self, ...) return rawCall(self, ...) end
-
-local function installNamecallHook()
-    if not silentSupported then
-        warn("[Aim] Silent aim ga didukung executor ini.")
-        return
-    end
-    local mt = getrawmetatable(game)
-    if setreadonly then pcall(setreadonly, mt, false) end
-    if getgenv and getgenv().__tomaAimOrig then
-        pcall(function() mt.__namecall = getgenv().__tomaAimOrig end)
-    end
-    local oldNamecall = mt.__namecall
-    if getgenv then getgenv().__tomaAimOrig = oldNamecall end
-    rawCall = function(self, ...) return oldNamecall(self, ...) end
-    local hookFn = function(self, ...)
-        if typeof(self) == "Instance" then
-            local method = getnamecallmethod()
-            for _, h in ipairs(namecallHandlers) do
-                local ok, res = h(self, method, ...)
-                if ok then return res end
-            end
-        end
-        return oldNamecall(self, ...)
-    end
-    mt.__namecall = newcclosure and newcclosure(hookFn) or hookFn
-end
-
-local function initTwistOfFate()
-    local AIM_TARGET_PART = "HumanoidRootPart"
-    local AIM_BULLET_SPEED = 200
-    local AIM_MUZZLE_OFFSET = Vector3.new(-1.41, -1.10, -5.44)
-    local AimCamera = Workspace.CurrentCamera
-    local aimSilentDir, aimTargetVel = nil, nil
-    local GUN_ANIM_ID = "75029269564639"
-
-    local function localAnimPlaying(animIdStr)
-        local char = LocalPlayer.Character
-        local hum = char and char:FindFirstChildOfClass("Humanoid")
-        local animator = hum and hum:FindFirstChildOfClass("Animator")
-        if not animator then return false end
-        for _, track in ipairs(animator:GetPlayingAnimationTracks()) do
-            if track.Animation and string.find(track.Animation.AnimationId, animIdStr, 1, true) then return true end
-        end
-        return false
-    end
-    
-    local aimVelSampleName, aimVelSamplePos, aimVelSampleT = nil, nil, 0
-
-    local function aimGetTeam()
-        if CONFIG.aimTargetMode == "Survivor" then
-            return Teams:FindFirstChild("Survivors")
-        end
-        return Teams:FindFirstChild("Killer")
-    end
-
-    local function aimGetFovCenter()
-        local vp = AimCamera.ViewportSize
-        return Vector2.new(vp.X/2, vp.Y/2)
-    end
-
-    local function aimGetPart(plr)
-        return plr and plr.Character and plr.Character:FindFirstChild(AIM_TARGET_PART)
-    end
-
-    -- Optimized Raycast settings
-    local aimRaycastParams = RaycastParams.new()
-    aimRaycastParams.FilterType = Enum.RaycastFilterType.Exclude
-    aimRaycastParams.IgnoreWater = true
-    local aimIgnoreCache = {}
-
-    local function aimHasLOS(part)
-        if not part or not part.Parent then return false end
-        local origin = AimCamera.CFrame.Position
-        
-        table.clear(aimIgnoreCache)
-        for _, plr in ipairs(Players:GetPlayers()) do
-            if plr.Character then
-                table.insert(aimIgnoreCache, plr.Character)
-            end
-        end
-        aimRaycastParams.FilterDescendantsInstances = aimIgnoreCache
-        
-        local char = part.Parent
-        local head = char and char:FindFirstChild("Head")
-        
-        if Workspace:Raycast(origin, part.Position - origin, aimRaycastParams) == nil then return true end
-        if head and Workspace:Raycast(origin, head.Position - origin, aimRaycastParams) == nil then return true end
-        if Workspace:Raycast(origin, (part.Position + Vector3.new(0, 2.5, 0)) - origin, aimRaycastParams) == nil then return true end
-        if Workspace:Raycast(origin, (part.Position - Vector3.new(0, 2.5, 0)) - origin, aimRaycastParams) == nil then return true end
-        
-        return false
-    end
-
-    local function aimGetTarget()
-        local team = aimGetTeam()
-        if not team then return nil end
-        local center = aimGetFovCenter()
-        local best, bestDist = nil, CONFIG.aimFovRadius
-        for _, plr in ipairs(team:GetPlayers()) do
-            if plr ~= LocalPlayer then
-                local part = aimGetPart(plr)
-                if part then
-                    local sp, onScreen = AimCamera:WorldToViewportPoint(part.Position)
-                    if onScreen then
-                        local d = (Vector2.new(sp.X, sp.Y) - center).Magnitude
-                        if d <= bestDist then
-                            if (not CONFIG.aimWallcheck) or aimHasLOS(part) then
-                                best, bestDist = plr, d
-                            end
-                        end
-                    end
-                end
-            end
-        end
-        return best
-    end
-
-    local function aimComputeDir(part, targetVel)
-        local muzzle = AimCamera.CFrame:PointToWorldSpace(AIM_MUZZLE_OFFSET)
-        local tp = part.Position
-        local aimPoint = tp
-        if CONFIG.aimEnableLead and targetVel then
-            local tvel = targetVel * CONFIG.aimLeadMult
-            local tof = (tp - muzzle).Magnitude / AIM_BULLET_SPEED
-            for _ = 1, 2 do
-                local predicted = tp + tvel * tof
-                tof = (predicted - muzzle).Magnitude / AIM_BULLET_SPEED
-            end
-            aimPoint = tp + tvel * tof
-        end
-        local dir = (aimPoint - muzzle)
-        if dir.Magnitude < 0.01 then return nil end
-        return dir.Unit
-    end
-
-    local aimFovCircle = nil
-    if Drawing then
-        aimFovCircle = Drawing.new("Circle")
-        aimFovCircle.Thickness = 2
-        aimFovCircle.NumSides = 64
-        aimFovCircle.Radius = CONFIG.aimFovRadius
-        aimFovCircle.Filled = false
-        aimFovCircle.Visible = false
-        aimFovCircle.Color = Color3.fromRGB(255, 255, 255)
-    end
-
-    local aimRenderConn = RunService.RenderStepped:Connect(function()
-        AimCamera = Workspace.CurrentCamera
-        if not (CONFIG.silentAimGun or CONFIG.aimLock) then
-            aimSilentDir = nil
-            if aimFovCircle then aimFovCircle.Visible = false end
-            return
-        end
-        if aimFovCircle then
-            aimFovCircle.Visible = CONFIG.aimShowFov
-            aimFovCircle.Radius = CONFIG.aimFovRadius
-            aimFovCircle.Position = aimGetFovCenter()
-        end
-        local target = aimGetTarget()
-        if target then
-            local part = aimGetPart(target)
-            if part then
-                local pos = part.Position
-                local now = tick()
-                if aimVelSampleName == target.Name and aimVelSamplePos then
-                    local dt = now - aimVelSampleT
-                    if dt >= 0.04 then
-                        local instVel = (pos - aimVelSamplePos) / dt
-                        aimTargetVel = aimTargetVel and aimTargetVel:Lerp(instVel, 0.5) or instVel
-                        aimVelSamplePos = pos
-                        aimVelSampleT = now
-                    end
-                else
-                    aimVelSampleName = target.Name
-                    aimVelSamplePos = pos
-                    aimVelSampleT = now
-                    aimTargetVel = Vector3.zero
-                end
-                local dir = aimComputeDir(part, aimTargetVel)
-                aimSilentDir = (CONFIG.silentAimGun and dir) or nil
-                if aimFovCircle then aimFovCircle.Color = Color3.fromRGB(255, 0, 0) end
-                if CONFIG.aimLock and dir and localAnimPlaying(GUN_ANIM_ID) then
-                    local cf = AimCamera.CFrame
-                    local goal = CFrame.new(cf.Position, cf.Position + dir)
-                    AimCamera.CFrame = cf:Lerp(goal, CONFIG.aimSmooth)
-                end
-            else
-                aimSilentDir = nil
-                aimVelSampleName = nil
-                if aimFovCircle then aimFovCircle.Color = Color3.fromRGB(255, 255, 255) end
-            end
-        else
-            aimSilentDir = nil
-            aimVelSampleName = nil
-            if aimFovCircle then aimFovCircle.Color = Color3.fromRGB(255, 255, 255) end
-        end
-    end)
-
-    onNamecall(function(self, method, ...)
-        if method == "FireServer" and CONFIG.silentAimGun and aimSilentDir and self.Name == "Fire" then
-            local p = self.Parent
-            if p and p.Parent and p.Parent.Name == "Items" then
-                local args = { ... }
-                if typeof(args[2]) == "Vector3" then
-                    args[2] = aimSilentDir
-                    return true, callOriginal(self, unpack(args))
-                end
-                for i, v in ipairs(args) do
-                    if typeof(v) == "Vector3" then
-                        args[i] = aimSilentDir
-                        return true, callOriginal(self, unpack(args))
-                    end
-                end
-            end
-        end
-        return false
-    end)
-
-    if getgenv then
-        local g = getgenv()
-        if g.__tomaAimRender then pcall(function() g.__tomaAimRender:Disconnect() end) end
-        g.__tomaAimRender = aimRenderConn
-        if g.__tomaFov then pcall(function() g.__tomaFov:Remove() end) end
-        g.__tomaFov = aimFovCircle
-    end
-end
-
-initTwistOfFate()
-installNamecallHook()
-
--- =====================================================================
 -- EXPORT COMBINED LOGIC MODULE
 -- =====================================================================
 local Logic = {
@@ -1214,36 +963,222 @@ local Logic = {
             autoSkillcheckEnabled = enabled
         end
     },
-    ESP = ESP,
-    Aim = {
-        SetTargetMode = function(mode: string)
-            CONFIG.aimTargetMode = mode
-        end,
-        SetSilentAim = function(enabled: boolean)
-            CONFIG.silentAimGun = enabled
-        end,
-        SetAimLock = function(enabled: boolean)
-            CONFIG.aimLock = enabled
-        end,
-        SetWallcheck = function(enabled: boolean)
-            CONFIG.aimWallcheck = enabled
-        end,
-        SetEnableLead = function(enabled: boolean)
-            CONFIG.aimEnableLead = enabled
-        end,
-        SetFovRadius = function(radius: number)
-            CONFIG.aimFovRadius = radius
-        end,
-        SetSmooth = function(smooth: number)
-            CONFIG.aimSmooth = smooth
-        end,
-        SetShowFov = function(enabled: boolean)
-            CONFIG.aimShowFov = enabled
-        end
-    }
+    ESP = ESP
 }
 
 getgenv().AutomaHubLogic = Logic
 return Logic
+
+
+--AimGun
+
+-- ============================================================
+-- Violence District | AIM (Side Script / Standalone)
+-- ------------------------------------------------------------
+-- Twist of Fate only (Aim Lock + Silent Aim gun)
+-- Lepas dari framework AutomaHub. Langsung ON pas di-run.
+-- Dipisah dari gabungan. Config pistol tetap sama.
+-- ============================================================
+
+local Players           = game:GetService("Players")
+local Teams             = game:GetService("Teams")
+local Workspace         = game:GetService("Workspace")
+local RunService        = game:GetService("RunService")
+local UserInputService  = game:GetService("UserInputService")
+local LocalPlayer       = Players.LocalPlayer
+
+-- ===================== CONFIG =====================
+local CONFIG = {
+    -- Twist of Fate (gun)
+    aimTargetMode   = "Killer",  -- "Killer" / "Survivor"
+    silentAimGun    = true,      -- silent aim peluru (remote Fire)
+    aimLock         = true,      -- kamera lock pas nahan pistol
+    aimWallcheck    = true,      -- cuma target yg keliatan (LOS)
+    aimEnableLead   = true,      -- prediksi gerak target
+    aimFovRadius    = 120,
+    aimLeadMult     = 1.0,
+    aimSmooth       = 0.25,
+    aimShowFov      = false,     -- POV circle (visual). set true kalau mau
+}
+
+-- ============================================================
+-- SHARED: namecall hook infra (buat silent aim)
+-- ============================================================
+local silentSupported = (getrawmetatable ~= nil) and (getnamecallmethod ~= nil) and (newcclosure ~= nil)
+local namecallHandlers = {}
+local rawCall = nil
+
+local function onNamecall(fn) table.insert(namecallHandlers, fn) end
+local function callOriginal(self, ...) return rawCall(self, ...) end
+
+local function installNamecallHook()
+    if not silentSupported then
+        warn("[Aim] Silent aim ga didukung executor ini (butuh getrawmetatable/getnamecallmethod/newcclosure).")
+        return
+    end
+    local mt = getrawmetatable(game)
+    if setreadonly then pcall(setreadonly, mt, false) end
+    if getgenv and getgenv().__tomaAimOrig then
+        pcall(function() mt.__namecall = getgenv().__tomaAimOrig end)
+    end
+    local oldNamecall = mt.__namecall
+    if getgenv then getgenv().__tomaAimOrig = oldNamecall end
+    rawCall = function(self, ...) return oldNamecall(self, ...) end
+    local hookFn = function(self, ...)
+        if typeof(self) == "Instance" then
+            local method = getnamecallmethod()
+            for _, h in ipairs(namecallHandlers) do
+                local ok, res = h(self, method, ...)
+                if ok then return res end
+            end
+        end
+        return oldNamecall(self, ...)
+    end
+    mt.__namecall = newcclosure and newcclosure(hookFn) or hookFn
+end
+
+-- ============================================================
+-- MODULE 1: Twist of Fate (Aim Lock + Silent Aim gun)
+-- ============================================================
+local function initTwistOfFate()
+    local aimTargetMode = CONFIG.aimTargetMode
+    local silentAimEnabled, aimLockEnabled = CONFIG.silentAimGun, CONFIG.aimLock
+    local aimWallcheck, enableLead = CONFIG.aimWallcheck, CONFIG.aimEnableLead
+    local fovRadius, fovFollowMouse, aimShowFov = CONFIG.aimFovRadius, false, CONFIG.aimShowFov
+    local AIM_TARGET_PART = "HumanoidRootPart"
+    local AIM_BULLET_SPEED = 200
+    local AIM_MUZZLE_OFFSET = Vector3.new(-1.41, -1.10, -5.44)
+    local AIM_LEAD_MULT = CONFIG.aimLeadMult
+    local AIM_SMOOTH = CONFIG.aimSmooth
+    local AimCamera = Workspace.CurrentCamera
+    local aimSilentDir, aimTargetVel = nil, nil
+    local GUN_ANIM_ID = "75029269564639"  -- anim nahan pistol (karakter sendiri) -> trigger aim lock
+
+    local function localAnimPlaying(animIdStr)
+        local char = LocalPlayer.Character
+        local hum = char and char:FindFirstChildOfClass("Humanoid")
+        local animator = hum and hum:FindFirstChildOfClass("Animator")
+        if not animator then return false end
+        for _, track in ipairs(animator:GetPlayingAnimationTracks()) do
+            if track.Animation and string.find(track.Animation.AnimationId, animIdStr, 1, true) then return true end
+        end
+        return false
+    end
+    local aimVelSampleName, aimVelSamplePos, aimVelSampleT = nil, nil, 0
+
+    local function aimGetTeam() if aimTargetMode == "Survivor" then return Teams:FindFirstChild("Survivors") end return Teams:FindFirstChild("Killer") end
+    local function aimGetFovCenter() if fovFollowMouse then local m = UserInputService:GetMouseLocation() return Vector2.new(m.X, m.Y) end local vp = AimCamera.ViewportSize return Vector2.new(vp.X/2, vp.Y/2) end
+    local function aimGetPart(plr) return plr and plr.Character and plr.Character:FindFirstChild(AIM_TARGET_PART) end
+
+    local function aimHasLOS(part)
+        if not part or not part.Parent then return false end
+        local origin = AimCamera.CFrame.Position
+        local rp = RaycastParams.new()
+        rp.FilterType = Enum.RaycastFilterType.Exclude rp.IgnoreWater = true
+        local ignore = {}
+        for _, plr in ipairs(Players:GetPlayers()) do if plr.Character then table.insert(ignore, plr.Character) end end
+        rp.FilterDescendantsInstances = ignore
+        local char = part.Parent
+        local points = { part.Position }
+        local head = char and char:FindFirstChild("Head")
+        if head then table.insert(points, head.Position) end
+        table.insert(points, part.Position + Vector3.new(0, 2.5, 0))
+        table.insert(points, part.Position - Vector3.new(0, 2.5, 0))
+        for _, p in ipairs(points) do if Workspace:Raycast(origin, p - origin, rp) == nil then return true end end
+        return false
+    end
+
+    local function aimGetTarget()
+        local team = aimGetTeam() if not team then return nil end
+        local center = aimGetFovCenter()
+        local best, bestDist = nil, fovRadius
+        for _, plr in ipairs(team:GetPlayers()) do
+            if plr ~= LocalPlayer then
+                local part = aimGetPart(plr)
+                if part then
+                    local sp, onScreen = AimCamera:WorldToViewportPoint(part.Position)
+                    if onScreen then
+                        local d = (Vector2.new(sp.X, sp.Y) - center).Magnitude
+                        if d <= bestDist then if (not aimWallcheck) or aimHasLOS(part) then best, bestDist = plr, d end end
+                    end
+                end
+            end
+        end
+        return best
+    end
+
+    local function aimComputeDir(part, targetVel)
+        local muzzle = AimCamera.CFrame:PointToWorldSpace(AIM_MUZZLE_OFFSET)
+        local tp = part.Position local aimPoint = tp
+        if enableLead and targetVel then
+            local tvel = targetVel * AIM_LEAD_MULT
+            local tof = (tp - muzzle).Magnitude / AIM_BULLET_SPEED
+            for _ = 1, 2 do local predicted = tp + tvel * tof tof = (predicted - muzzle).Magnitude / AIM_BULLET_SPEED end
+            aimPoint = tp + tvel * tof
+        end
+        local dir = (aimPoint - muzzle) if dir.Magnitude < 0.01 then return nil end return dir.Unit
+    end
+
+    local aimFovCircle = nil
+    if Drawing then
+        aimFovCircle = Drawing.new("Circle")
+        aimFovCircle.Thickness = 2 aimFovCircle.NumSides = 64 aimFovCircle.Radius = fovRadius
+        aimFovCircle.Filled = false aimFovCircle.Visible = false aimFovCircle.Color = Color3.fromRGB(255, 255, 255)
+    end
+
+    local aimRenderConn = RunService.RenderStepped:Connect(function()
+        AimCamera = Workspace.CurrentCamera
+        if not (silentAimEnabled or aimLockEnabled) then aimSilentDir = nil if aimFovCircle then aimFovCircle.Visible = false end return end
+        if aimFovCircle then aimFovCircle.Visible = aimShowFov aimFovCircle.Radius = fovRadius aimFovCircle.Position = aimGetFovCenter() end
+        local target = aimGetTarget()
+        if target then
+            local part = aimGetPart(target)
+            if part then
+                local pos = part.Position local now = tick()
+                if aimVelSampleName == target.Name and aimVelSamplePos then
+                    local dt = now - aimVelSampleT
+                    if dt >= 0.04 then
+                        local instVel = (pos - aimVelSamplePos) / dt
+                        aimTargetVel = aimTargetVel and aimTargetVel:Lerp(instVel, 0.5) or instVel
+                        aimVelSamplePos = pos aimVelSampleT = now
+                    end
+                else aimVelSampleName = target.Name aimVelSamplePos = pos aimVelSampleT = now aimTargetVel = Vector3.zero end
+                local dir = aimComputeDir(part, aimTargetVel)
+                aimSilentDir = (silentAimEnabled and dir) or nil
+                if aimFovCircle then aimFovCircle.Color = Color3.fromRGB(255, 0, 0) end
+                if aimLockEnabled and dir and localAnimPlaying(GUN_ANIM_ID) then
+                    local cf = AimCamera.CFrame local goal = CFrame.new(cf.Position, cf.Position + dir)
+                    AimCamera.CFrame = cf:Lerp(goal, AIM_SMOOTH)
+                end
+            else aimSilentDir = nil aimVelSampleName = nil if aimFovCircle then aimFovCircle.Color = Color3.fromRGB(255, 255, 255) end end
+        else aimSilentDir = nil aimVelSampleName = nil if aimFovCircle then aimFovCircle.Color = Color3.fromRGB(255, 255, 255) end end
+    end)
+
+    onNamecall(function(self, method, ...)
+        if method == "FireServer" and silentAimEnabled and aimSilentDir and self.Name == "Fire" then
+            local p = self.Parent
+            if p and p.Parent and p.Parent.Name == "Items" then
+                local args = { ... }
+                if typeof(args[2]) == "Vector3" then args[2] = aimSilentDir return true, callOriginal(self, unpack(args)) end
+                for i, v in ipairs(args) do if typeof(v) == "Vector3" then args[i] = aimSilentDir return true, callOriginal(self, unpack(args)) end end
+            end
+        end
+        return false
+    end)
+
+    if getgenv then
+        local g = getgenv()
+        if g.__tomaAimRender then pcall(function() g.__tomaAimRender:Disconnect() end) end
+        g.__tomaAimRender = aimRenderConn
+        if g.__tomaFov then pcall(function() g.__tomaFov:Remove() end) end
+        g.__tomaFov = aimFovCircle
+    end
+end
+
+-- ==================== INIT ========================
+initTwistOfFate()
+installNamecallHook()
+
+print("[Aim Gun] Pistol script loaded. Silent aim supported: " .. tostring(silentSupported))
 
 
