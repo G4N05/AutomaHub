@@ -1437,14 +1437,11 @@ local Logic = {
             if plr ~= LocalPlayer then
                 local part = veilGetPart(plr)
                 if part then
-                    local physicalDist = (part.Position - origin).Magnitude
-                    if physicalDist <= CONFIG.veilMaxDist then
-                        local sp, onScreen = cam:WorldToViewportPoint(part.Position)
-                        if onScreen then
-                            local d = (Vector2.new(sp.X, sp.Y) - center).Magnitude
-                            if d <= bestDist and veilInRange(origin, part.Position, VEIL_AIM_LOCK_SPEED, VEIL_GRAVITY) then 
-                                best, bestDist = plr, d 
-                            end
+                    local sp, onScreen = cam:WorldToViewportPoint(part.Position)
+                    if onScreen then
+                        local d = (Vector2.new(sp.X, sp.Y) - center).Magnitude
+                        if d <= bestDist and veilInRange(origin, part.Position, VEIL_AIM_LOCK_SPEED, VEIL_GRAVITY) then 
+                            best, bestDist = plr, d 
                         end
                     end
                 end
