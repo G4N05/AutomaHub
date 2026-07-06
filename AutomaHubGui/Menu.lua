@@ -39,7 +39,6 @@ end)()
 local Combat = Logic and Logic.Combat
 local ESP = Logic and Logic.ESP
 local Aim = Logic and Logic.Aim
-local Veil = Logic and Logic.Veil
 
 -- Create Tabs
 local ThemeTab = Window:Tab({ Title = "Theme", Icon = "palette" })
@@ -162,30 +161,6 @@ AimSection:Dropdown({
             elseif value == "Both" then
                 Aim.SetSilentAim(true)
                 Aim.SetAimLock(true)
-            end
-        end
-    end
-})
-
-AimSection:Dropdown({
-    Title = "Aim Veil",
-    Desc = "Select Aim Veil mode",
-    Values = { "Disabled", "Silent Aim", "Aim Lock", "Both" },
-    Value = "Both",
-    Callback = function(value: string)
-        if Veil then
-            if value == "Disabled" then
-                Veil.SetSilentAim(false)
-                Veil.SetAimLock(false)
-            elseif value == "Silent Aim" then
-                Veil.SetSilentAim(true)
-                Veil.SetAimLock(false)
-            elseif value == "Aim Lock" then
-                Veil.SetSilentAim(false)
-                Veil.SetAimLock(true)
-            elseif value == "Both" then
-                Veil.SetSilentAim(true)
-                Veil.SetAimLock(true)
             end
         end
     end
