@@ -38,11 +38,13 @@ end)()
 
 local Combat = Logic and Logic.Combat
 local ESP = Logic and Logic.ESP
+local Aim = Logic and Logic.Aim
 
 -- Create Tabs
 local ThemeTab = Window:Tab({ Title = "Theme", Icon = "palette" })
 local CombatTab = Window:Tab({ Title = "Combat", Icon = "swords" })
 local VisualTab = Window:Tab({ Title = "Visual", Icon = "eye" })
+local AimTab = Window:Tab({ Title = "Aim", Icon = "crosshair" })
 
 -- Combat Tab Sections (Tidied and organized)
 local ParrySection = CombatTab:Section({ Title = "Auto Parry Settings" })
@@ -107,6 +109,103 @@ SkillcheckSection:Toggle({
     Callback = function(value: boolean)
         if Combat and Combat.SetAutoSkillcheck then
             Combat.SetAutoSkillcheck(value)
+        end
+    end
+})
+
+-- Aim Tab (Aim Gun Settings)
+local AimSection = AimTab:Section({ Title = "Aim Gun Settings" })
+
+AimSection:Dropdown({
+    Title = "Aim Gun",
+    Desc = "Select target mode",
+    Values = { "Off", "Killer", "Survivor" },
+    Value = "Killer",
+    Callback = function(value: string)
+        if Aim then
+            if value == "Off" then
+                Aim.SetSilentAim(false)
+                Aim.SetAimLock(false)
+            else
+                Aim.SetTargetMode(value)
+                Aim.SetSilentAim(true)
+                Aim.SetAimLock(true)
+            end
+        end
+    end
+})
+
+AimSection:Toggle({
+    Title = "Aim Lock",
+    Desc = "Camera lock when holding gun",
+    Value = true,
+    Callback = function(value: boolean)
+        if Aim and Aim.SetAimLock then
+            Aim.SetAimLock(value)
+        end
+    end
+})
+
+AimSection:Toggle({
+    Title = "Silent Aim",
+    Desc = "Redirect bullets to target",
+    Value = true,
+    Callback = function(value: boolean)
+        if Aim and Aim.SetSilentAim then
+            Aim.SetSilentAim(value)
+        end
+    end
+})
+
+AimSection:Toggle({
+    Title = "Wall Check",
+    Desc = "Target only visible players",
+    Value = true,
+    Callback = function(value: boolean)
+        if Aim and Aim.SetWallcheck then
+            Aim.SetWallcheck(value)
+        end
+    end
+})
+
+AimSection:Toggle({
+    Title = "Predict Movement (Lead)",
+    Desc = "Predict target movement direction",
+    Value = true,
+    Callback = function(value: boolean)
+        if Aim and Aim.SetEnableLead then
+            Aim.SetEnableLead(value)
+        end
+    end
+})
+
+AimSection:Slider({
+    Title = "FOV Radius",
+    Value = { Min = 30, Max = 400, Default = 120 },
+    Callback = function(value: number)
+        if Aim and Aim.SetFovRadius then
+            Aim.SetFovRadius(value)
+        end
+    end
+})
+
+AimSection:Slider({
+    Title = "Aim Smoothness",
+    Value = { Min = 5, Max = 100, Default = 25 },
+    Callback = function(value: number)
+        if Aim and Aim.SetSmooth then
+            Aim.SetSmooth(value / 100)
+        end
+    end
+})
+
+AimSection:Toggle({
+    Title = "Show FOV Circle",
+    Desc = "Show visual representation of FOV",
+    Value = false,
+    Callback = function(value: boolean)
+        if Aim and Aim.SetShowFov then
+            Aim.SetShowFov(value)
         end
     end
 })
