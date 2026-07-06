@@ -940,28 +940,70 @@ function ESP.SetSelectedKinds(selected: any)
 end
 
 -- =====================================================================
--- AIM MODULE (Twist of Fate - Aim Lock + Silent Aim)
+-- EXPORT COMBINED LOGIC MODULE
 -- =====================================================================
+local Logic = {
+    Combat = {
+        SetAutoParry = function(enabled: boolean)
+            autoParryEnabled = enabled
+        end,
+        SetParryDistance = function(dist: number)
+            parryDistance = dist
+        end,
+        SetDashParryDistance = function(dist: number)
+            dashDistance = dist
+        end,
+        SetAutoDodgeAbyss = function(enabled: boolean)
+            autoDodgeEnabled = enabled
+        end,
+        SetDodgeDistance = function(dist: number)
+            dodgeDistance = dist
+        end,
+        SetAutoSkillcheck = function(enabled: boolean)
+            autoSkillcheckEnabled = enabled
+        end
+    },
+    ESP = ESP
+}
+
+getgenv().AutomaHubLogic = Logic
+return Logic
+
+
+--AimGun
+
+-- ============================================================
+-- Violence District | AIM (Side Script / Standalone)
+-- ------------------------------------------------------------
+-- Twist of Fate only (Aim Lock + Silent Aim gun)
+-- Lepas dari framework AutomaHub. Langsung ON pas di-run.
+-- Dipisah dari gabungan. Config pistol tetap sama.
+-- ============================================================
+
+local Players           = game:GetService("Players")
+local Teams             = game:GetService("Teams")
+local Workspace         = game:GetService("Workspace")
+local RunService        = game:GetService("RunService")
+local UserInputService  = game:GetService("UserInputService")
+local LocalPlayer       = Players.LocalPlayer
+
+-- ===================== CONFIG =====================
 local CONFIG = {
-    aimTargetMode   = "Killer",
-    silentAimGun    = true,
-    aimLock         = true,
-    aimWallcheck    = true,
-    aimEnableLead   = true,
+    -- Twist of Fate (gun)
+    aimTargetMode   = "Killer",  -- "Killer" / "Survivor"
+    silentAimGun    = true,      -- silent aim peluru (remote Fire)
+    aimLock         = true,      -- kamera lock pas nahan pistol
+    aimWallcheck    = true,      -- cuma target yg keliatan (LOS)
+    aimEnableLead   = true,      -- prediksi gerak target
     aimFovRadius    = 120,
     aimLeadMult     = 1.0,
     aimSmooth       = 0.25,
-    aimShowFov      = false,
-    -- Veil Config
-    veilSilentAim   = true,
-    veilAimLock     = true,
-    veilEnableLead  = true,
-    veilFovRadius   = 150,
-    veilShowFov     = false,
-    veilLeadMult    = 1.9,
-    veilMaxDist     = 40,
+    aimShowFov      = false,     -- POV circle (visual). set true kalau mau
 }
 
+-- ============================================================
+-- SHARED: namecall hook infra (buat silent aim)
+-- ============================================================
 local silentSupported = (getrawmetatable ~= nil) and (getnamecallmethod ~= nil) and (newcclosure ~= nil)
 local namecallHandlers = {}
 local rawCall = nil
@@ -971,7 +1013,7 @@ local function callOriginal(self, ...) return rawCall(self, ...) end
 
 local function installNamecallHook()
     if not silentSupported then
-        warn("[Aim] Silent aim ga didukung executor ini.")
+        warn("[Aim] Silent aim ga didukung executor ini (butuh getrawmetatable/getnamecallmethod/newcclosure).")
         return
     end
     local mt = getrawmetatable(game)
@@ -995,13 +1037,22 @@ local function installNamecallHook()
     mt.__namecall = newcclosure and newcclosure(hookFn) or hookFn
 end
 
+-- ============================================================
+-- MODULE 1: Twist of Fate (Aim Lock + Silent Aim gun)
+-- ============================================================
 local function initTwistOfFate()
+    local aimTargetMode = CONFIG.aimTargetMode
+    local silentAimEnabled, aimLockEnabled = CONFIG.silentAimGun, CONFIG.aimLock
+    local aimWallcheck, enableLead = CONFIG.aimWallcheck, CONFIG.aimEnableLead
+    local fovRadius, fovFollowMouse, aimShowFov = CONFIG.aimFovRadius, false, CONFIG.aimShowFov
     local AIM_TARGET_PART = "HumanoidRootPart"
     local AIM_BULLET_SPEED = 200
     local AIM_MUZZLE_OFFSET = Vector3.new(-1.41, -1.10, -5.44)
+    local AIM_LEAD_MULT = CONFIG.aimLeadMult
+    local AIM_SMOOTH = CONFIG.aimSmooth
     local AimCamera = Workspace.CurrentCamera
     local aimSilentDir, aimTargetVel = nil, nil
-    local GUN_ANIM_ID = "75029269564639"
+    local GUN_ANIM_ID = "75029269564639"  -- anim nahan pistol (karakter sendiri) -> trigger aim lock
 
     local function localAnimPlaying(animIdStr)
         local char = LocalPlayer.Character
@@ -1013,59 +1064,34 @@ local function initTwistOfFate()
         end
         return false
     end
-    
     local aimVelSampleName, aimVelSamplePos, aimVelSampleT = nil, nil, 0
 
-    local function aimGetTeam()
-        if CONFIG.aimTargetMode == "Survivor" then
-            return Teams:FindFirstChild("Survivors")
-        end
-        return Teams:FindFirstChild("Killer")
-    end
-
-    local function aimGetFovCenter()
-        local vp = AimCamera.ViewportSize
-        return Vector2.new(vp.X/2, vp.Y/2)
-    end
-
-    local function aimGetPart(plr)
-        return plr and plr.Character and plr.Character:FindFirstChild(AIM_TARGET_PART)
-    end
-
-    -- Optimized Raycast settings
-    local aimRaycastParams = RaycastParams.new()
-    aimRaycastParams.FilterType = Enum.RaycastFilterType.Exclude
-    aimRaycastParams.IgnoreWater = true
-    local aimIgnoreCache = {}
+    local function aimGetTeam() if aimTargetMode == "Survivor" then return Teams:FindFirstChild("Survivors") end return Teams:FindFirstChild("Killer") end
+    local function aimGetFovCenter() if fovFollowMouse then local m = UserInputService:GetMouseLocation() return Vector2.new(m.X, m.Y) end local vp = AimCamera.ViewportSize return Vector2.new(vp.X/2, vp.Y/2) end
+    local function aimGetPart(plr) return plr and plr.Character and plr.Character:FindFirstChild(AIM_TARGET_PART) end
 
     local function aimHasLOS(part)
         if not part or not part.Parent then return false end
         local origin = AimCamera.CFrame.Position
-        
-        table.clear(aimIgnoreCache)
-        for _, plr in ipairs(Players:GetPlayers()) do
-            if plr.Character then
-                table.insert(aimIgnoreCache, plr.Character)
-            end
-        end
-        aimRaycastParams.FilterDescendantsInstances = aimIgnoreCache
-        
+        local rp = RaycastParams.new()
+        rp.FilterType = Enum.RaycastFilterType.Exclude rp.IgnoreWater = true
+        local ignore = {}
+        for _, plr in ipairs(Players:GetPlayers()) do if plr.Character then table.insert(ignore, plr.Character) end end
+        rp.FilterDescendantsInstances = ignore
         local char = part.Parent
+        local points = { part.Position }
         local head = char and char:FindFirstChild("Head")
-        
-        if Workspace:Raycast(origin, part.Position - origin, aimRaycastParams) == nil then return true end
-        if head and Workspace:Raycast(origin, head.Position - origin, aimRaycastParams) == nil then return true end
-        if Workspace:Raycast(origin, (part.Position + Vector3.new(0, 2.5, 0)) - origin, aimRaycastParams) == nil then return true end
-        if Workspace:Raycast(origin, (part.Position - Vector3.new(0, 2.5, 0)) - origin, aimRaycastParams) == nil then return true end
-        
+        if head then table.insert(points, head.Position) end
+        table.insert(points, part.Position + Vector3.new(0, 2.5, 0))
+        table.insert(points, part.Position - Vector3.new(0, 2.5, 0))
+        for _, p in ipairs(points) do if Workspace:Raycast(origin, p - origin, rp) == nil then return true end end
         return false
     end
 
     local function aimGetTarget()
-        local team = aimGetTeam()
-        if not team then return nil end
+        local team = aimGetTeam() if not team then return nil end
         local center = aimGetFovCenter()
-        local best, bestDist = nil, CONFIG.aimFovRadius
+        local best, bestDist = nil, fovRadius
         for _, plr in ipairs(team:GetPlayers()) do
             if plr ~= LocalPlayer then
                 local part = aimGetPart(plr)
@@ -1073,11 +1099,7 @@ local function initTwistOfFate()
                     local sp, onScreen = AimCamera:WorldToViewportPoint(part.Position)
                     if onScreen then
                         local d = (Vector2.new(sp.X, sp.Y) - center).Magnitude
-                        if d <= bestDist then
-                            if (not CONFIG.aimWallcheck) or aimHasLOS(part) then
-                                best, bestDist = plr, d
-                            end
-                        end
+                        if d <= bestDist then if (not aimWallcheck) or aimHasLOS(part) then best, bestDist = plr, d end end
                     end
                 end
             end
@@ -1087,100 +1109,58 @@ local function initTwistOfFate()
 
     local function aimComputeDir(part, targetVel)
         local muzzle = AimCamera.CFrame:PointToWorldSpace(AIM_MUZZLE_OFFSET)
-        local tp = part.Position
-        local aimPoint = tp
-        if CONFIG.aimEnableLead and targetVel then
-            local tvel = targetVel * CONFIG.aimLeadMult
+        local tp = part.Position local aimPoint = tp
+        if enableLead and targetVel then
+            local tvel = targetVel * AIM_LEAD_MULT
             local tof = (tp - muzzle).Magnitude / AIM_BULLET_SPEED
-            for _ = 1, 2 do
-                local predicted = tp + tvel * tof
-                tof = (predicted - muzzle).Magnitude / AIM_BULLET_SPEED
-            end
+            for _ = 1, 2 do local predicted = tp + tvel * tof tof = (predicted - muzzle).Magnitude / AIM_BULLET_SPEED end
             aimPoint = tp + tvel * tof
         end
-        local dir = (aimPoint - muzzle)
-        if dir.Magnitude < 0.01 then return nil end
-        return dir.Unit
+        local dir = (aimPoint - muzzle) if dir.Magnitude < 0.01 then return nil end return dir.Unit
     end
 
     local aimFovCircle = nil
     if Drawing then
         aimFovCircle = Drawing.new("Circle")
-        aimFovCircle.Thickness = 2
-        aimFovCircle.NumSides = 64
-        aimFovCircle.Radius = CONFIG.aimFovRadius
-        aimFovCircle.Filled = false
-        aimFovCircle.Visible = false
-        aimFovCircle.Color = Color3.fromRGB(255, 255, 255)
+        aimFovCircle.Thickness = 2 aimFovCircle.NumSides = 64 aimFovCircle.Radius = fovRadius
+        aimFovCircle.Filled = false aimFovCircle.Visible = false aimFovCircle.Color = Color3.fromRGB(255, 255, 255)
     end
 
     local aimRenderConn = RunService.RenderStepped:Connect(function()
         AimCamera = Workspace.CurrentCamera
-        if not (CONFIG.silentAimGun or CONFIG.aimLock) then
-            aimSilentDir = nil
-            if aimFovCircle then aimFovCircle.Visible = false end
-            return
-        end
-        if aimFovCircle then
-            aimFovCircle.Visible = CONFIG.aimShowFov
-            aimFovCircle.Radius = CONFIG.aimFovRadius
-            aimFovCircle.Position = aimGetFovCenter()
-        end
+        if not (silentAimEnabled or aimLockEnabled) then aimSilentDir = nil if aimFovCircle then aimFovCircle.Visible = false end return end
+        if aimFovCircle then aimFovCircle.Visible = aimShowFov aimFovCircle.Radius = fovRadius aimFovCircle.Position = aimGetFovCenter() end
         local target = aimGetTarget()
         if target then
             local part = aimGetPart(target)
             if part then
-                local pos = part.Position
-                local now = tick()
+                local pos = part.Position local now = tick()
                 if aimVelSampleName == target.Name and aimVelSamplePos then
                     local dt = now - aimVelSampleT
                     if dt >= 0.04 then
                         local instVel = (pos - aimVelSamplePos) / dt
                         aimTargetVel = aimTargetVel and aimTargetVel:Lerp(instVel, 0.5) or instVel
-                        aimVelSamplePos = pos
-                        aimVelSampleT = now
+                        aimVelSamplePos = pos aimVelSampleT = now
                     end
-                else
-                    aimVelSampleName = target.Name
-                    aimVelSamplePos = pos
-                    aimVelSampleT = now
-                    aimTargetVel = Vector3.zero
-                end
+                else aimVelSampleName = target.Name aimVelSamplePos = pos aimVelSampleT = now aimTargetVel = Vector3.zero end
                 local dir = aimComputeDir(part, aimTargetVel)
-                aimSilentDir = (CONFIG.silentAimGun and dir) or nil
+                aimSilentDir = (silentAimEnabled and dir) or nil
                 if aimFovCircle then aimFovCircle.Color = Color3.fromRGB(255, 0, 0) end
-                if CONFIG.aimLock and dir and localAnimPlaying(GUN_ANIM_ID) then
-                    local cf = AimCamera.CFrame
-                    local goal = CFrame.new(cf.Position, cf.Position + dir)
-                    AimCamera.CFrame = cf:Lerp(goal, CONFIG.aimSmooth)
+                if aimLockEnabled and dir and localAnimPlaying(GUN_ANIM_ID) then
+                    local cf = AimCamera.CFrame local goal = CFrame.new(cf.Position, cf.Position + dir)
+                    AimCamera.CFrame = cf:Lerp(goal, AIM_SMOOTH)
                 end
-            else
-                aimSilentDir = nil
-                aimVelSampleName = nil
-                if aimFovCircle then aimFovCircle.Color = Color3.fromRGB(255, 255, 255) end
-            end
-        else
-            aimSilentDir = nil
-            aimVelSampleName = nil
-            if aimFovCircle then aimFovCircle.Color = Color3.fromRGB(255, 255, 255) end
-        end
+            else aimSilentDir = nil aimVelSampleName = nil if aimFovCircle then aimFovCircle.Color = Color3.fromRGB(255, 255, 255) end end
+        else aimSilentDir = nil aimVelSampleName = nil if aimFovCircle then aimFovCircle.Color = Color3.fromRGB(255, 255, 255) end end
     end)
 
     onNamecall(function(self, method, ...)
-        if method == "FireServer" and CONFIG.silentAimGun and aimSilentDir and self.Name == "Fire" then
+        if method == "FireServer" and silentAimEnabled and aimSilentDir and self.Name == "Fire" then
             local p = self.Parent
             if p and p.Parent and p.Parent.Name == "Items" then
                 local args = { ... }
-                if typeof(args[2]) == "Vector3" then
-                    args[2] = aimSilentDir
-                    return true, callOriginal(self, unpack(args))
-                end
-                for i, v in ipairs(args) do
-                    if typeof(v) == "Vector3" then
-                        args[i] = aimSilentDir
-                        return true, callOriginal(self, unpack(args))
-                    end
-                end
+                if typeof(args[2]) == "Vector3" then args[2] = aimSilentDir return true, callOriginal(self, unpack(args)) end
+                for i, v in ipairs(args) do if typeof(v) == "Vector3" then args[i] = aimSilentDir return true, callOriginal(self, unpack(args)) end end
             end
         end
         return false
@@ -1195,441 +1175,10 @@ local function initTwistOfFate()
     end
 end
 
+-- ==================== INIT ========================
 initTwistOfFate()
 installNamecallHook()
 
--- ============================================================
--- MODULE 2: Veil (Silent Aim + Aim Lock ballistic)
--- ============================================================
-local function initVeil()
-    local VEIL_TARGET_PART = "HumanoidRootPart"
-    local VEIL_GRAVITY = 98.1
-    local VEIL_AIM_SMOOTH = 0.35
-    local VEIL_AIM_LOCK_SPEED = 165
+print("[Aim Gun] Pistol script loaded. Silent aim supported: " .. tostring(silentSupported))
 
-    local veilTargetPos, veilTargetVel, veilTargetName = nil, nil, nil
-    local veilSampleName, veilSamplePos, veilSampleT = nil, nil, 0
-    local veilLockedPlayer = nil
-    local veilLockGraceUntil = 0
 
-    local function veilGetFovCenter() 
-        local vp = Workspace.CurrentCamera.ViewportSize 
-        return Vector2.new(vp.X/2, vp.Y/2) 
-    end
-    
-    local function veilGetPart(plr) 
-        return plr and plr.Character and plr.Character:FindFirstChild(VEIL_TARGET_PART) 
-    end
-
-    local function veilInRange(origin, targetPos, speed, g)
-        local disp = targetPos - origin
-        local dy = disp.Y
-        local flatX, flatZ = disp.X, disp.Z
-        local dx = math.sqrt(flatX * flatX + flatZ * flatZ)
-        if dx < 0.001 then return true end
-        local v2 = speed * speed
-        local root = v2 * v2 - g * (g * dx * dx + 2 * dy * v2)
-        return root >= 0
-    end
-
-    local function veilGetTarget()
-        local team = Teams:FindFirstChild("Survivors") if not team then return nil end
-        local cam = Workspace.CurrentCamera 
-        local origin = cam.CFrame.Position 
-        local center = veilGetFovCenter()
-        local best, bestDist = nil, CONFIG.veilFovRadius
-        for _, plr in ipairs(team:GetPlayers()) do
-            if plr ~= LocalPlayer then
-                local part = veilGetPart(plr)
-                if part then
-                    local physicalDist = (part.Position - origin).Magnitude
-                    if physicalDist <= CONFIG.veilMaxDist then
-                        local sp, onScreen = cam:WorldToViewportPoint(part.Position)
-                        if onScreen then
-                            local d = (Vector2.new(sp.X, sp.Y) - center).Magnitude
-                            if d <= bestDist and veilInRange(origin, part.Position, VEIL_AIM_LOCK_SPEED, VEIL_GRAVITY) then 
-                                best, bestDist = plr, d 
-                            end
-                        end
-                    end
-                end
-            end
-        end
-        return best
-    end
-
-    local function veilSolveBallistic(origin, target, speed, g)
-        local disp = target - origin
-        local dy = disp.Y
-        local flatX, flatZ = disp.X, disp.Z
-        local dx = math.sqrt(flatX * flatX + flatZ * flatZ)
-        if dx < 0.001 then return (disp.Magnitude > 0) and disp.Unit or nil, 0 end
-        local v2 = speed * speed
-        local root = v2 * v2 - g * (g * dx * dx + 2 * dy * v2)
-        local tanTheta
-        if root < 0 then tanTheta = 1 else local sq = math.sqrt(root) tanTheta = (v2 - sq) / (g * dx) end
-        local horiz = Vector3.new(flatX / dx, 0, flatZ / dx)
-        local dir = (horiz + Vector3.new(0, tanTheta, 0))
-        if dir.Magnitude < 0.001 then return nil end
-        dir = dir.Unit
-        local cosTheta = math.sqrt(dir.X * dir.X + dir.Z * dir.Z)
-        local tof = (speed * cosTheta > 0.001) and (dx / (speed * cosTheta)) or 0
-        return dir, tof
-    end
-
-    local function veilSolveLead(origin, targetPos, targetVel, speed, g)
-        local pred = targetPos
-        local applyLead = CONFIG.veilEnableLead and targetVel
-        local mult = applyLead and CONFIG.veilLeadMult or 0
-        local dir, tof
-        for _ = 1, 3 do
-            dir, tof = veilSolveBallistic(origin, pred, speed, g)
-            if not dir then return nil end
-            if applyLead then pred = targetPos + targetVel * (tof * mult) end
-        end
-        return dir, tof
-    end
-
-    local veilFovCircle = nil
-    if Drawing then
-        veilFovCircle = Drawing.new("Circle")
-        veilFovCircle.Thickness = 2 veilFovCircle.NumSides = 64 veilFovCircle.Radius = CONFIG.veilFovRadius
-        veilFovCircle.Filled = false veilFovCircle.Visible = false veilFovCircle.Color = Color3.fromRGB(255, 255, 255)
-    end
-
-    local veilRenderConn = RunService.RenderStepped:Connect(function()
-        if not (CONFIG.veilSilentAim or CONFIG.veilAimLock) then
-            veilTargetPos, veilTargetVel, veilTargetName = nil, nil, nil
-            veilSampleName = nil veilLockedPlayer = nil
-            if veilFovCircle then veilFovCircle.Visible = false end
-            return
-        end
-        if veilFovCircle then veilFovCircle.Visible = CONFIG.veilShowFov veilFovCircle.Radius = CONFIG.veilFovRadius veilFovCircle.Position = veilGetFovCenter() end
-        local stanceChar = LocalPlayer.Character
-        local inThrowStance = stanceChar and stanceChar:GetAttribute("spearmode") == true
-        local holding = inThrowStance == true
-        local target
-        if holding then
-            if not veilLockedPlayer then veilLockedPlayer = veilGetTarget() end
-            if not (veilLockedPlayer and veilLockedPlayer.Parent and veilGetPart(veilLockedPlayer)) then veilLockedPlayer = veilGetTarget() end
-            target = veilLockedPlayer
-            veilLockGraceUntil = tick() + 0.3
-        elseif veilLockedPlayer and tick() < veilLockGraceUntil and veilLockedPlayer.Parent and veilGetPart(veilLockedPlayer) then
-            target = veilLockedPlayer
-        else
-            veilLockedPlayer = nil
-            target = veilGetTarget()
-        end
-        if target then
-            local part = veilGetPart(target)
-            if part then
-                local pos = part.Position local now = tick()
-                if veilSampleName == target.Name and veilSamplePos then
-                    local dt = now - veilSampleT
-                    if dt >= 0.04 then
-                        local instVel = (pos - veilSamplePos) / dt
-                        veilTargetVel = veilTargetVel and veilTargetVel:Lerp(instVel, 0.5) or instVel
-                        veilSamplePos = pos veilSampleT = now
-                    end
-                else veilSampleName = target.Name veilSamplePos = pos veilSampleT = now veilTargetVel = Vector3.zero end
-                veilTargetPos = pos veilTargetName = target.Name
-                if veilFovCircle then veilFovCircle.Color = Color3.fromRGB(255, 0, 0) end
-                if CONFIG.veilAimLock and holding then
-                    local cam = Workspace.CurrentCamera local origin = cam.CFrame.Position
-                    local dir = veilSolveLead(origin, pos, veilTargetVel, VEIL_AIM_LOCK_SPEED, VEIL_GRAVITY)
-                    if dir then local goal = CFrame.new(origin, origin + dir) cam.CFrame = cam.CFrame:Lerp(goal, VEIL_AIM_SMOOTH) end
-                end
-            else veilTargetPos, veilTargetVel = nil, nil veilSampleName = nil end
-        else veilTargetPos, veilTargetVel = nil, nil veilSampleName = nil if veilFovCircle then veilFovCircle.Color = Color3.fromRGB(255, 255, 255) end end
-    end)
-
-    onNamecall(function(self, method, ...)
-        if method == "FireServer" and CONFIG.veilSilentAim and veilTargetPos and self.Name == "Spearthrow" then
-            local p = self.Parent
-            if p and p.Name == "Veil" then
-                local args = { ... }
-                local dirArg, speedArg, originArg = args[1], args[2], args[3]
-                if typeof(dirArg) == "Vector3" and type(speedArg) == "number" and typeof(originArg) == "Vector3" then
-                    local newDir = veilSolveLead(originArg, veilTargetPos, veilTargetVel, speedArg, VEIL_GRAVITY)
-                    if newDir then args[1] = newDir return true, callOriginal(self, unpack(args)) end
-                end
-            end
-        end
-        return false
-    end)
-
-    if getgenv then
-        local g = getgenv()
-        if g.__tomaVeilRender then pcall(function() g.__tomaVeilRender:Disconnect() end) end
-        g.__tomaVeilRender = veilRenderConn
-        if g.__tomaVeilFov then pcall(function() g.__tomaVeilFov:Remove() end) end
-        g.__tomaVeilFov = veilFovCircle
-    end
-end
-
-initVeil()
-
--- =====================================================================
--- EXPORT COMBINED LOGIC MODULE
--- =====================================================================
-local Logic = {
-    Combat = {
-        SetAutoParry = function(enabled: boolean)
-            autoParryEnabled = enabled
-        end,
-        SetParryDistance = function(dist: number)
-            parryDistance = dist
-        end,
-        SetDashParryDistance = function(dist: number)
-            dashDistance = dist
-        end,
-        SetAutoDodgeAbyss = function(enabled: boolean)
-            autoDodgeEnabled = enabled
-        end,
-        SetDodgeDistance = function(dist: number)
-            dodgeDistance = dist
-        end,
-        SetAutoSkillcheck = function(enabled: boolean)
-            autoSkillcheckEnabled = enabled
-        end
-    },
-    ESP = ESP,
-    Aim = {
-        SetTargetMode = function(mode: string)
-            CONFIG.aimTargetMode = mode
-        end,
-        SetSilentAim = function(enabled: boolean)
-            CONFIG.silentAimGun = enabled
-        end,
-        SetAimLock = function(enabled: boolean)
-            CONFIG.aimLock = enabled
-        end,
-        SetWallcheck = function(enabled: boolean)
-            CONFIG.aimWallcheck = enabled
-        end,
-        SetEnableLead = function(enabled: boolean)
-            CONFIG.aimEnableLead = enabled
-        end,
-        SetFovRadius = function(radius: number)
-            CONFIG.aimFovRadius = radius
-        end,
-        SetSmooth = function(smooth: number)
-            CONFIG.aimSmooth = smooth
-        end,
-        SetShowFov = function(enabled: boolean)
-            CONFIG.aimShowFov = enabled
-        end,
-        
-        -- Veil specific
-        SetVeilSilentAim = function(enabled: boolean)
-            CONFIG.veilSilentAim = enabled
-        end,
-        SetVeilAimLock = function(enabled: boolean)
-            CONFIG.veilAimLock = enabled
-        end,
-        SetVeilEnableLead = function(enabled: boolean)
-        local team = Teams:FindFirstChild("Survivors") if not team then return nil end
-        local cam = Workspace.CurrentCamera 
-        local origin = cam.CFrame.Position 
-        local center = veilGetFovCenter()
-        local best, bestDist = nil, CONFIG.veilFovRadius
-        for _, plr in ipairs(team:GetPlayers()) do
-            if plr ~= LocalPlayer then
-                local part = veilGetPart(plr)
-                if part then
-                    local sp, onScreen = cam:WorldToViewportPoint(part.Position)
-                    if onScreen then
-                        local d = (Vector2.new(sp.X, sp.Y) - center).Magnitude
-                        if d <= bestDist and veilInRange(origin, part.Position, VEIL_AIM_LOCK_SPEED, VEIL_GRAVITY) then 
-                            best, bestDist = plr, d 
-                        end
-                    end
-                end
-            end
-        end
-        return best
-    end
-
-    local function veilSolveBallistic(origin, target, speed, g)
-        local disp = target - origin
-        local dy = disp.Y
-        local flatX, flatZ = disp.X, disp.Z
-        local dx = math.sqrt(flatX * flatX + flatZ * flatZ)
-        if dx < 0.001 then return (disp.Magnitude > 0) and disp.Unit or nil, 0 end
-        local v2 = speed * speed
-        local root = v2 * v2 - g * (g * dx * dx + 2 * dy * v2)
-        local tanTheta
-        if root < 0 then tanTheta = 1 else local sq = math.sqrt(root) tanTheta = (v2 - sq) / (g * dx) end
-        local horiz = Vector3.new(flatX / dx, 0, flatZ / dx)
-        local dir = (horiz + Vector3.new(0, tanTheta, 0))
-        if dir.Magnitude < 0.001 then return nil end
-        dir = dir.Unit
-        local cosTheta = math.sqrt(dir.X * dir.X + dir.Z * dir.Z)
-        local tof = (speed * cosTheta > 0.001) and (dx / (speed * cosTheta)) or 0
-        return dir, tof
-    end
-
-    local function veilSolveLead(origin, targetPos, targetVel, speed, g)
-        local pred = targetPos
-        local applyLead = CONFIG.veilEnableLead and targetVel
-        local mult = applyLead and CONFIG.veilLeadMult or 0
-        local dir, tof
-        for _ = 1, 3 do
-            dir, tof = veilSolveBallistic(origin, pred, speed, g)
-            if not dir then return nil end
-            if applyLead then pred = targetPos + targetVel * (tof * mult) end
-        end
-        return dir, tof
-    end
-
-    local veilFovCircle = nil
-    if Drawing then
-        veilFovCircle = Drawing.new("Circle")
-        veilFovCircle.Thickness = 2 veilFovCircle.NumSides = 64 veilFovCircle.Radius = CONFIG.veilFovRadius
-        veilFovCircle.Filled = false veilFovCircle.Visible = false veilFovCircle.Color = Color3.fromRGB(255, 255, 255)
-    end
-
-    local veilRenderConn = RunService.RenderStepped:Connect(function()
-        if not (CONFIG.veilSilentAim or CONFIG.veilAimLock) then
-            veilTargetPos, veilTargetVel, veilTargetName = nil, nil, nil
-            veilSampleName = nil veilLockedPlayer = nil
-            if veilFovCircle then veilFovCircle.Visible = false end
-            return
-        end
-        if veilFovCircle then veilFovCircle.Visible = CONFIG.veilShowFov veilFovCircle.Radius = CONFIG.veilFovRadius veilFovCircle.Position = veilGetFovCenter() end
-        local stanceChar = LocalPlayer.Character
-        local inThrowStance = stanceChar and stanceChar:GetAttribute("spearmode") == true
-        local holding = inThrowStance == true
-        local target
-        if holding then
-            if not veilLockedPlayer then veilLockedPlayer = veilGetTarget() end
-            if not (veilLockedPlayer and veilLockedPlayer.Parent and veilGetPart(veilLockedPlayer)) then veilLockedPlayer = veilGetTarget() end
-            target = veilLockedPlayer
-            veilLockGraceUntil = tick() + 0.3
-        elseif veilLockedPlayer and tick() < veilLockGraceUntil and veilLockedPlayer.Parent and veilGetPart(veilLockedPlayer) then
-            target = veilLockedPlayer
-        else
-            veilLockedPlayer = nil
-            target = veilGetTarget()
-        end
-        if target then
-            local part = veilGetPart(target)
-            if part then
-                local pos = part.Position local now = tick()
-                if veilSampleName == target.Name and veilSamplePos then
-                    local dt = now - veilSampleT
-                    if dt >= 0.04 then
-                        local instVel = (pos - veilSamplePos) / dt
-                        veilTargetVel = veilTargetVel and veilTargetVel:Lerp(instVel, 0.5) or instVel
-                        veilSamplePos = pos veilSampleT = now
-                    end
-                else veilSampleName = target.Name veilSamplePos = pos veilSampleT = now veilTargetVel = Vector3.zero end
-                veilTargetPos = pos veilTargetName = target.Name
-                if veilFovCircle then veilFovCircle.Color = Color3.fromRGB(255, 0, 0) end
-                if CONFIG.veilAimLock and holding then
-                    local cam = Workspace.CurrentCamera local origin = cam.CFrame.Position
-                    local dir = veilSolveLead(origin, pos, veilTargetVel, VEIL_AIM_LOCK_SPEED, VEIL_GRAVITY)
-                    if dir then local goal = CFrame.new(origin, origin + dir) cam.CFrame = cam.CFrame:Lerp(goal, VEIL_AIM_SMOOTH) end
-                end
-            else veilTargetPos, veilTargetVel = nil, nil veilSampleName = nil end
-        else veilTargetPos, veilTargetVel = nil, nil veilSampleName = nil if veilFovCircle then veilFovCircle.Color = Color3.fromRGB(255, 255, 255) end end
-    end)
-
-    onNamecall(function(self, method, ...)
-        if method == "FireServer" and CONFIG.veilSilentAim and veilTargetPos and self.Name == "Spearthrow" then
-            local p = self.Parent
-            if p and p.Name == "Veil" then
-                local args = { ... }
-                local dirArg, speedArg, originArg = args[1], args[2], args[3]
-                if typeof(dirArg) == "Vector3" and type(speedArg) == "number" and typeof(originArg) == "Vector3" then
-                    local newDir = veilSolveLead(originArg, veilTargetPos, veilTargetVel, speedArg, VEIL_GRAVITY)
-                    if newDir then args[1] = newDir return true, callOriginal(self, unpack(args)) end
-                end
-            end
-        end
-        return false
-    end)
-
-    if getgenv then
-        local g = getgenv()
-        if g.__tomaVeilRender then pcall(function() g.__tomaVeilRender:Disconnect() end) end
-        g.__tomaVeilRender = veilRenderConn
-        if g.__tomaVeilFov then pcall(function() g.__tomaVeilFov:Remove() end) end
-        g.__tomaVeilFov = veilFovCircle
-    end
-end
-
-initVeil()
-
--- =====================================================================
--- EXPORT COMBINED LOGIC MODULE
--- =====================================================================
-local Logic = {
-    Combat = {
-        SetAutoParry = function(enabled: boolean)
-            autoParryEnabled = enabled
-        end,
-        SetParryDistance = function(dist: number)
-            parryDistance = dist
-        end,
-        SetDashParryDistance = function(dist: number)
-            dashDistance = dist
-        end,
-        SetAutoDodgeAbyss = function(enabled: boolean)
-            autoDodgeEnabled = enabled
-        end,
-        SetDodgeDistance = function(dist: number)
-            dodgeDistance = dist
-        end,
-        SetAutoSkillcheck = function(enabled: boolean)
-            autoSkillcheckEnabled = enabled
-        end
-    },
-    ESP = ESP,
-    Aim = {
-        SetTargetMode = function(mode: string)
-            CONFIG.aimTargetMode = mode
-        end,
-        SetSilentAim = function(enabled: boolean)
-            CONFIG.silentAimGun = enabled
-        end,
-        SetAimLock = function(enabled: boolean)
-            CONFIG.aimLock = enabled
-        end,
-        SetWallcheck = function(enabled: boolean)
-            CONFIG.aimWallcheck = enabled
-        end,
-        SetEnableLead = function(enabled: boolean)
-            CONFIG.aimEnableLead = enabled
-        end,
-        SetFovRadius = function(radius: number)
-            CONFIG.aimFovRadius = radius
-        end,
-        SetSmooth = function(smooth: number)
-            CONFIG.aimSmooth = smooth
-        end,
-        SetShowFov = function(enabled: boolean)
-            CONFIG.aimShowFov = enabled
-        end,
-        
-        -- Veil specific
-        SetVeilSilentAim = function(enabled: boolean)
-            CONFIG.veilSilentAim = enabled
-        end,
-        SetVeilAimLock = function(enabled: boolean)
-            CONFIG.veilAimLock = enabled
-        end,
-        SetVeilEnableLead = function(enabled: boolean)
-            CONFIG.veilEnableLead = enabled
-        end,
-        SetVeilShowFov = function(enabled: boolean)
-            CONFIG.veilShowFov = enabled
-        end,
-        SetVeilFovRadius = function(radius: number)
-            CONFIG.veilFovRadius = radius
-        end
-    }
-}
-
-getgenv().AutomaHubLogic = Logic
-return Logic
