@@ -231,6 +231,63 @@ AimSection:Slider({
     end
 })
 
+-- Aim Veil Settings (Mirrors Aim Gun settings)
+AimSection:Dropdown({
+    Title = "Aim Veil",
+    Desc = "Select Aim Veil mode",
+    Values = { "Disabled", "Silent Aim", "Aim Lock", "Both" },
+    Value = "Both",
+    Callback = function(value: string)
+        if Aim then
+            if value == "Disabled" then
+                Aim.SetVeilSilentAim(false)
+                Aim.SetVeilAimLock(false)
+            elseif value == "Silent Aim" then
+                Aim.SetVeilSilentAim(true)
+                Aim.SetVeilAimLock(false)
+            elseif value == "Aim Lock" then
+                Aim.SetVeilSilentAim(false)
+                Aim.SetVeilAimLock(true)
+            elseif value == "Both" then
+                Aim.SetVeilSilentAim(true)
+                Aim.SetVeilAimLock(true)
+            end
+        end
+    end
+})
+
+AimSection:Toggle({
+    Title = "Show FOV (Veil)",
+    Desc = "Show FOV circle for Veil",
+    Value = false,
+    Callback = function(value: boolean)
+        if Aim and Aim.SetVeilShowFov then
+            Aim.SetVeilShowFov(value)
+        end
+    end
+})
+
+AimSection:Slider({
+    Title = "FOV Radius (Veil)",
+    Value = { Min = 50, Max = 400, Default = 150 },
+    Callback = function(value: number)
+        if Aim and Aim.SetVeilFovRadius then
+            Aim.SetVeilFovRadius(value)
+        end
+    end
+})
+
+AimSection:Toggle({
+    Title = "Predict Movement (Veil)",
+    Desc = "Predict target movement trajectory for Veil",
+    Value = true,
+    Callback = function(value: boolean)
+        if Aim and Aim.SetVeilEnableLead then
+            Aim.SetVeilEnableLead(value)
+        end
+    end
+})
+
 -- Theme Tab (Dropdown selection)
 local themes = {}
 for name in pairs(WindUI:GetThemes()) do
