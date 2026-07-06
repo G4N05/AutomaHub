@@ -38,11 +38,13 @@ end)()
 
 local Combat = Logic and Logic.Combat
 local ESP = Logic and Logic.ESP
+local Aim = Logic and Logic.Aim
 
 -- Create Tabs
 local ThemeTab = Window:Tab({ Title = "Theme", Icon = "palette" })
 local CombatTab = Window:Tab({ Title = "Combat", Icon = "swords" })
 local VisualTab = Window:Tab({ Title = "Visual", Icon = "eye" })
+local AimTab = Window:Tab({ Title = "Aim", Icon = "crosshair" })
 
 -- Combat Tab Sections (Tidied and organized)
 local ParrySection = CombatTab:Section({ Title = "Auto Parry Settings" })
@@ -133,6 +135,76 @@ ESPSection:Dropdown({
     Callback = function(values: { string })
         if ESP and ESP.SetSelectedKinds then
             ESP.SetSelectedKinds(values)
+        end
+    end
+})
+
+-- Aim Tab (Aim Settings)
+local AimSection = AimTab:Section({ Title = "Aim Gun Settings" })
+
+AimSection:Dropdown({
+    Title = "Aim Gun",
+    Desc = "Choose aim assistant mode",
+    Values = { "Off", "Aim Lock", "Silent Aim", "Both" },
+    Value = "Off",
+    Callback = function(value: string)
+        if Aim and Aim.SetAimGunMode then
+            Aim.SetAimGunMode(value)
+        end
+    end
+})
+
+AimSection:Dropdown({
+    Title = "Target Mode",
+    Desc = "Select target team",
+    Values = { "Killer", "Survivor" },
+    Value = "Killer",
+    Callback = function(value: string)
+        if Aim and Aim.SetTargetMode then
+            Aim.SetTargetMode(value)
+        end
+    end
+})
+
+AimSection:Toggle({
+    Title = "Wallcheck",
+    Desc = "Target only visible players (LOS)",
+    Value = true,
+    Callback = function(value: boolean)
+        if Aim and Aim.SetWallcheck then
+            Aim.SetWallcheck(value)
+        end
+    end
+})
+
+AimSection:Toggle({
+    Title = "Enable Lead",
+    Desc = "Predict target movement",
+    Value = true,
+    Callback = function(value: boolean)
+        if Aim and Aim.SetEnableLead then
+            Aim.SetEnableLead(value)
+        end
+    end
+})
+
+AimSection:Toggle({
+    Title = "Show FOV",
+    Desc = "Show field of view circle",
+    Value = false,
+    Callback = function(value: boolean)
+        if Aim and Aim.SetShowFov then
+            Aim.SetShowFov(value)
+        end
+    end
+})
+
+AimSection:Slider({
+    Title = "FOV Radius",
+    Value = { Min = 30, Max = 400, Default = 120 },
+    Callback = function(value: number)
+        if Aim and Aim.SetFovRadius then
+            Aim.SetFovRadius(value)
         end
     end
 })
