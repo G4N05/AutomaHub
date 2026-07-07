@@ -101,6 +101,29 @@ DodgeSection:Slider({
     end
 })
 
+local PalletSection = CombatTab:Section({ Title = "Auto Drop Pallet Settings" })
+PalletSection:Toggle({
+    Title = "Auto Drop Pallet",
+    Desc = "Automatically drop nearby pallets when killer is close",
+    Value = false,
+    Callback = function(value: boolean)
+        if Combat and Combat.SetAutoPallet then
+            Combat.SetAutoPallet(value)
+        end
+    end
+})
+
+PalletSection:Slider({
+    Title = "Trigger Distance",
+    Value = { Min = 5.0, Max = 25.0, Default = 13.2 },
+    Callback = function(value: number)
+        local stepped = math.round(value * 10) / 10
+        if Combat and Combat.SetPalletDistance then
+            Combat.SetPalletDistance(stepped)
+        end
+    end
+})
+
 local SkillcheckSection = CombatTab:Section({ Title = "Skillcheck Settings" })
 SkillcheckSection:Toggle({
     Title = "Auto Skillcheck",

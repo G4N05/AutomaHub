@@ -52,6 +52,9 @@ local dashDistance = 30
 local autoDodgeEnabled = false
 local dodgeDistance = 25
 
+local autoPalletEnabled = false
+local TRIGGER_DISTANCE = 13.2
+
 -- Optimized Heartbeat for Killer Tracking (Only runs when Combat features are active)
 RunService.Heartbeat:Connect(function()
     if not autoParryEnabled and not autoDodgeEnabled then return end
@@ -499,6 +502,116 @@ RunService.Heartbeat:Connect(function()
 end)
 
 task.spawn(resolveGeneratorRemotes)
+
+-- =====================================================================
+-- Auto Drop Pallete
+-- =====================================================================
+local Players = game:GetService("Players")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local RunService = game:GetService("RunService")
+local CollectionService = game:GetService("CollectionService")
+local UIS = game:GetService("UserInputService")
+
+local LocalPlayer = Players.LocalPlayer
+local PalletDropEvent = ReplicatedStorage:WaitForChild("Remotes"):WaitForChild("Pallet"):WaitForChild("PalletDropEvent")
+
+local PLAYER_INTERACT_DISTANCE = 6 
+local droppedDebounce = {}
+
+local keybindConnection
+keybindConnection = UIS.InputBegan:Connect(function(input, gpe)
+    if gpe then return end
+    if input.KeyCode == Enum.KeyCode.J then
+        TRIGGER_DISTANCE = math.round((TRIGGER_DISTANCE + 0.1) * 10) / 10
+        print("AutoPallet Jarak Trigger Bertambah:", TRIGGER_DISTANCE)
+    elseif input.KeyCode == Enum.KeyCode.K then
+        TRIGGER_DISTANCE = math.max(0.1, math.round((TRIGGER_DISTANCE - 0.1) * 10) / 10)
+        print("AutoPallet Jarak Trigger Berkurang:", TRIGGER_DISTANCE)
+    end
+end)
+
+local killerPlayer = nil
+local function getKillerCharacter()
+    if killerPlayer and killerPlayer.Parent == Players and killerPlayer.Team and killerPlayer.Team.Name == "Killer" then
+        return killerPlayer.Character
+    end
+    for _, p in ipairs(Players:GetPlayers()) do
+        if p.Team and p.Team.Name == "Killer" then
+            killerPlayer = p
+            return p.Character
+        end
+    end
+    return nil
+end
+
+-- ponytail: cache pallet points list and update via signals instead of GetTagged per frame
+local palletPoints = {}
+for _, p in ipairs(CollectionService:GetTagged("PalletPoint")) do
+    if p:IsA("BasePart") then
+        table.insert(palletPoints, p)
+    end
+end
+
+if _G.AutoPalletAddConn then pcall(function() _G.AutoPalletAddConn:Disconnect() end) end
+if _G.AutoPalletRemoveConn then pcall(function() _G.AutoPalletRemoveConn:Disconnect() end) end
+
+_G.AutoPalletAddConn = CollectionService:GetInstanceAddedSignal("PalletPoint"):Connect(function(inst)
+    if inst:IsA("BasePart") and not table.find(palletPoints, inst) then
+        table.insert(palletPoints, inst)
+    end
+end)
+
+_G.AutoPalletRemoveConn = CollectionService:GetInstanceRemovedSignal("PalletPoint"):Connect(function(inst)
+    local idx = table.find(palletPoints, inst)
+    if idx then
+        table.remove(palletPoints, idx)
+    end
+end)
+
+local connection
+connection = RunService.Heartbeat:Connect(function()
+    if not autoPalletEnabled then return end
+    local char = LocalPlayer.Character
+    local hrp = char and char:FindFirstChild("HumanoidRootPart")
+    local hum = char and char:FindFirstChildOfClass("Humanoid")
+    if not hrp or not hum or hum.Health <= 50 then return end
+    
+    if hrp:HasTag("doing action") or hrp:HasTag("carried") or char:GetAttribute("carried") then
+        return
+    end
+    
+    local killerChar = getKillerCharacter()
+    local killerHrp = killerChar and killerChar:FindFirstChild("HumanoidRootPart")
+    if not killerHrp then return end
+    
+    for i = 1, #palletPoints do
+        local palletPoint = palletPoints[i]
+        if not droppedDebounce[palletPoint] then
+            local distToPlayer = (palletPoint.Position - hrp.Position).Magnitude
+            if distToPlayer <= PLAYER_INTERACT_DISTANCE then
+                local distToKiller = (palletPoint.Position - killerHrp.Position).Magnitude
+                if distToKiller <= TRIGGER_DISTANCE then
+                    droppedDebounce[palletPoint] = true
+                    PalletDropEvent:FireServer(palletPoint)
+                    task.delay(5, function()
+                        droppedDebounce[palletPoint] = nil
+                    end)
+                end
+            end
+        end
+    end
+end)
+
+if _G.AutoPalletConnection then
+    _G.AutoPalletConnection:Disconnect()
+end
+if _G.AutoPalletKeybindConnection then
+    _G.AutoPalletKeybindConnection:Disconnect()
+end
+
+_G.AutoPalletConnection = connection
+_G.AutoPalletKeybindConnection = keybindConnection
+print("Auto Pallet Drop Script updated and optimized!")
 
 -- =====================================================================
 -- VISUAL (ESP) MODULE
@@ -981,6 +1094,12 @@ local Logic = {
         end,
         SetAutoSkillcheck = function(enabled: boolean)
             autoSkillcheckEnabled = enabled
+        end,
+        SetAutoPallet = function(enabled: boolean)
+            autoPalletEnabled = enabled
+        end,
+        SetPalletDistance = function(dist: number)
+            TRIGGER_DISTANCE = dist
         end
     },
     ESP = ESP,
