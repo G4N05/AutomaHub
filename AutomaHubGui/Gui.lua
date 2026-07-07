@@ -56,3 +56,26 @@ local Window = WindUI:CreateWindow({
     },
 })
 getgenv().Window = Window
+
+-- Mouse unlock/restore logic for desktop players
+local UserInputService = game:GetService("UserInputService")
+if not UserInputService.TouchEnabled then
+    local savedMouseBehavior = UserInputService.MouseBehavior
+    
+    local function unlockMouse()
+        savedMouseBehavior = UserInputService.MouseBehavior
+        UserInputService.MouseBehavior = Enum.MouseBehavior.Default
+        UserInputService.ModalEnabled = true
+    end
+    
+    local function restoreMouse()
+        UserInputService.ModalEnabled = false
+        UserInputService.MouseBehavior = savedMouseBehavior
+    end
+    
+    -- Force unlock on startup since GUI starts open
+    unlockMouse()
+    
+    Window:OnOpen(unlockMouse)
+    Window:OnClose(restoreMouse)
+end
