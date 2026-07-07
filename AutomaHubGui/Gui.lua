@@ -61,16 +61,40 @@ getgenv().Window = Window
 local UserInputService = game:GetService("UserInputService")
 if not UserInputService.TouchEnabled then
     local savedMouseBehavior = UserInputService.MouseBehavior
+    local savedMouseIconEnabled = UserInputService.MouseIconEnabled
+    local behaviorConn, iconConn
     
     local function unlockMouse()
         savedMouseBehavior = UserInputService.MouseBehavior
+        savedMouseIconEnabled = UserInputService.MouseIconEnabled
+        
         UserInputService.MouseBehavior = Enum.MouseBehavior.Default
+        UserInputService.MouseIconEnabled = true
         UserInputService.ModalEnabled = true
+        
+        if behaviorConn then behaviorConn:Disconnect() end
+        if iconConn then iconConn:Disconnect() end
+        
+        behaviorConn = UserInputService:GetPropertyChangedSignal("MouseBehavior"):Connect(function()
+            if UserInputService.MouseBehavior ~= Enum.MouseBehavior.Default then
+                UserInputService.MouseBehavior = Enum.MouseBehavior.Default
+            end
+        end)
+        
+        iconConn = UserInputService:GetPropertyChangedSignal("MouseIconEnabled"):Connect(function()
+            if not UserInputService.MouseIconEnabled then
+                UserInputService.MouseIconEnabled = true
+            end
+        end)
     end
     
     local function restoreMouse()
+        if behaviorConn then behaviorConn:Disconnect() behaviorConn = nil end
+        if iconConn then iconConn:Disconnect() iconConn = nil end
+        
         UserInputService.ModalEnabled = false
         UserInputService.MouseBehavior = savedMouseBehavior
+        UserInputService.MouseIconEnabled = savedMouseIconEnabled
     end
     
     -- Force unlock on startup since GUI starts open
