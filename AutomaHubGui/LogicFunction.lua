@@ -8,6 +8,7 @@ local RunService        = game:GetService("RunService")
 local UserInputService  = game:GetService("UserInputService")
 local Teams             = game:GetService("Teams")
 local Workspace         = game:GetService("Workspace")
+local VirtualInputManager = game:GetService("VirtualInputManager")
 
 local LocalPlayer = Players.LocalPlayer
 
@@ -173,42 +174,52 @@ local function isKillerFacing(): boolean
     return dot >= facingDotThreshold
 end
 
-local parryController: any = nil
-local function resolveParryController(): any
-    if parryController then return parryController end
-    -- Match instance by its exact class metatable (ParryClient), same as the
-    -- working standalone script. The old loose duck-typing scan grabbed the
-    -- first table with .Parry/.CanUse (usually the class module/prototype),
-    -- so :Parry() ran without instance state and silently did nothing.
-    local ok, ParryClient = pcall(function()
-        return require(ReplicatedStorage.Modules.Items.ParryClient)
-    end)
-    if not ok or not ParryClient then return nil end
-    if type(getgc) ~= "function" then return nil end
-
-    for _, v in ipairs(getgc(true)) do
-        if type(v) == "table" and getmetatable(v) == ParryClient then
-            parryController = v
-            break
-        end
-    end
-
-    return parryController
-end
-
 local function doParryPress()
     isAutoParrying = true
     lastAutoPress = os.clock()
     lastPrePress = os.clock()
-    local ctrl = resolveParryController()
-    if ctrl then
-        local ok, err = pcall(function()
-            if ctrl:CanUse() then ctrl:Parry() end
-        end)
-        if not ok then parryController = nil end
-    else
-        warn("[AutomaHub Debug] Controller is nil!")
+
+    -- Check for mobile parry button
+    local PlayerGui = LocalPlayer:FindFirstChildOfClass("PlayerGui")
+    local survivorMob = PlayerGui and PlayerGui:FindFirstChild("Survivor-mob")
+    local parryButton = survivorMob and survivorMob:FindFirstChild("Controls") and survivorMob.Controls:FindFirstChild("Gui-mob")
+
+    local isMobileButtonActive = false
+    if parryButton and parryButton.Visible then
+        local screenGui = parryButton:FindFirstAncestorOfClass("ScreenGui")
+        if screenGui and screenGui.Enabled then
+            isMobileButtonActive = true
+        end
     end
+
+    if isMobileButtonActive and parryButton then
+        local fired = false
+        if firesignal then
+            firesignal(parryButton.MouseButton1Down)
+            fired = true
+        end
+        if getconnections then
+            for _, connection in ipairs(getconnections(parryButton.MouseButton1Down)) do
+                connection:Fire()
+                fired = true
+            end
+        end
+        if not fired then
+            local pos = parryButton.AbsolutePosition + (parryButton.AbsoluteSize / 2)
+            VirtualInputManager:SendMouseButtonEvent(pos.X, pos.Y, 0, true, game)
+            task.wait(0.05)
+            VirtualInputManager:SendMouseButtonEvent(pos.X, pos.Y, 0, false, game)
+        end
+    else
+        -- PC virtual input: right click
+        local viewportSize = Workspace.CurrentCamera and Workspace.CurrentCamera.ViewportSize or Vector2.new(1000, 800)
+        local posX = viewportSize.X / 2
+        local posY = viewportSize.Y / 2
+        VirtualInputManager:SendMouseButtonEvent(posX, posY, 1, true, game)
+        task.wait(0.05)
+        VirtualInputManager:SendMouseButtonEvent(posX, posY, 1, false, game)
+    end
+
     task.delay(0.05, function() isAutoParrying = false end)
 end
 
@@ -252,7 +263,7 @@ end)
 
 CollectionService:GetInstanceAddedSignal("Silenced"):Connect(function(i) if i == Character then isSilenced = true end end)
 CollectionService:GetInstanceRemovedSignal("Silenced"):Connect(function(i) if i == Character then isSilenced = false end end)
-LocalPlayer.CharacterAdded:Connect(function() isOnCooldown, isResolving, isSilenced, parryController = false, false, false, nil end)
+LocalPlayer.CharacterAdded:Connect(function() isOnCooldown, isResolving, isSilenced = false, false, false end)
 
 if KillerTeam then
     hookKillerAnimators()
@@ -410,8 +421,6 @@ local CONFIG_SC = {
     zoneCenter   = 108,
     zoneMax      = 116,
 }
-
-local VirtualInputManager = game:GetService("VirtualInputManager")
 
 -- ponytail: virtual input lets Roblox's engine handle the skillcheck state naturally
 local function simulateInput()
