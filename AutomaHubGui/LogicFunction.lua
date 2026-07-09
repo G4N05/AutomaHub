@@ -405,68 +405,42 @@ end
 -- =====================================================================
 local autoSkillcheckEnabled = false
 local scTriggered = false
-local SkillCheckResultEvent, SkillCheckEvent = nil, nil
-local generatorModel, generatorPoint = nil, nil
 
 local CONFIG_SC = {
-    zoneMin      = 102,
-    zoneMax      = 116,
     zoneCenter   = 108,
-    cleanupDelay = 0.15,
+    zoneMax      = 116,
 }
 
-local function resolveGeneratorRemotes()
-    local ok, genFolder = pcall(function()
-        return ReplicatedStorage:WaitForChild("Remotes", 5):WaitForChild("Generator", 5)
-    end)
-    if ok and genFolder then
-        SkillCheckResultEvent = genFolder:FindFirstChild("SkillCheckResultEvent")
-        SkillCheckEvent       = genFolder:FindFirstChild("SkillCheckEvent")
-        if SkillCheckEvent then
-            SkillCheckEvent.OnClientEvent:Connect(function(gm, gp)
-                generatorModel, generatorPoint = gm, gp
-            end)
+local VirtualInputManager = game:GetService("VirtualInputManager")
+
+-- ponytail: virtual input lets Roblox's engine handle the skillcheck state naturally
+local function simulateInput()
+    local PlayerGui = LocalPlayer:FindFirstChildOfClass("PlayerGui")
+    local survivorMob = PlayerGui and PlayerGui:FindFirstChild("Survivor-mob")
+    local actionButton = survivorMob and survivorMob:FindFirstChild("Controls") and survivorMob.Controls:FindFirstChild("action")
+
+    local isMobileButtonActive = false
+    if actionButton and actionButton.Visible then
+        local screenGui = actionButton:FindFirstAncestorOfClass("ScreenGui")
+        if screenGui and screenGui.Enabled then
+            isMobileButtonActive = true
         end
     end
-end
 
-local function doSkillcheckSuccess(line, goal)
-    scTriggered = true
-    
-    local frozenRot = CONFIG_SC.zoneCenter + goal.Rotation
-    pcall(function()
-        local TweenService = game:GetService("TweenService")
-        TweenService:Create(line, TweenInfo.new(0), { Rotation = frozenRot }):Play()
-        line.Rotation = frozenRot
-    end)
-
-    local char = LocalPlayer.Character
-    local scr = char and char:FindFirstChild("Skillcheck-gen")
-    if scr then
-        pcall(function() scr.Disabled = true end)
-        local great = scr:FindFirstChild("Great")
-        if great then pcall(function() great:Play() end) end
+    if isMobileButtonActive and actionButton then
+        if firesignal then
+            firesignal(actionButton.MouseButton1Down)
+        else
+            local pos = actionButton.AbsolutePosition + (actionButton.AbsoluteSize / 2)
+            VirtualInputManager:SendMouseButtonEvent(pos.X, pos.Y, 0, true, game)
+            task.wait(0.05)
+            VirtualInputManager:SendMouseButtonEvent(pos.X, pos.Y, 0, false, game)
+        end
+    else
+        VirtualInputManager:SendKeyEvent(true, Enum.KeyCode.Space, false, game)
+        task.wait(0.05)
+        VirtualInputManager:SendKeyEvent(false, Enum.KeyCode.Space, false, game)
     end
-
-    if SkillCheckResultEvent and generatorModel and generatorPoint then
-        pcall(function()
-            SkillCheckResultEvent:FireServer("success", 1, generatorModel, generatorPoint)
-        end)
-    end
-
-    task.delay(CONFIG_SC.cleanupDelay, function()
-        pcall(function()
-            local PlayerGui = LocalPlayer:FindFirstChild("PlayerGui")
-            local gui = PlayerGui and PlayerGui:FindFirstChild("SkillCheckPromptGui")
-            if gui then
-                local check = gui:FindFirstChild("Check")
-                if check then check.Visible = false end
-            end
-            line.Rotation = 0
-            goal.Rotation = 0
-        end)
-        if scr then pcall(function() scr.Disabled = false end) end
-    end)
 end
 
 RunService.Heartbeat:Connect(function()
@@ -493,15 +467,14 @@ RunService.Heartbeat:Connect(function()
 
     local rotation = line.Rotation
     local goalRotation = goal.Rotation
-    local minZone = CONFIG_SC.zoneMin + goalRotation
+    local perfectZone = CONFIG_SC.zoneCenter + goalRotation
     local maxZone = CONFIG_SC.zoneMax + goalRotation
 
-    if rotation >= minZone and rotation <= maxZone then
-        doSkillcheckSuccess(line, goal)
+    if rotation >= perfectZone and rotation <= maxZone then
+        scTriggered = true
+        task.spawn(simulateInput)
     end
 end)
-
-task.spawn(resolveGeneratorRemotes)
 
 -- =====================================================================
 -- Auto Drop Pallete
