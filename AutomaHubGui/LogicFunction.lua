@@ -631,29 +631,20 @@ local RunService = game:GetService("RunService")
 
 local localPlayer = Players.LocalPlayer
 
--- ponytail: search controller ONCE in background, cache in _G to survive reinjects
--- getgc(true) costs 4.7ms per call — never call it in Heartbeat
-local controller = _G.AutoVaultController or nil
+-- ponytail: find controller dynamically instead of blocking initialization if not spawned yet
+local controller = nil
 local getSprintHooked = false
-local isNearVaultTarget = false
 
--- One-shot background search — retries every 0.5s until found
-local function findControllerAsync()
-    if controller then return end
-    task.defer(function()
-        while not controller do
-            for _, v in ipairs(getgc(true)) do
-                if type(v) == "table" and type(rawget(v, "startCooldown")) == "function" and type(rawget(v, "prompts")) == "table" then
-                    controller = v
-                    _G.AutoVaultController = v -- cache for reinjects
-                    break
-                end
-            end
-            if not controller then task.wait(0.5) end
+local function getController()
+    if controller then return controller end
+    for _, v in ipairs(getgc(true)) do
+        if type(v) == "table" and type(rawget(v, "startCooldown")) == "function" and type(rawget(v, "prompts")) == "table" then
+            controller = v
+            break
         end
-    end)
+    end
+    return controller
 end
-findControllerAsync()
 
 -- Import the necessary game modules
 local SurvivorActions = require(ReplicatedStorage.Modules.Survivors.SurvivorActions)
@@ -663,9 +654,9 @@ local SurvivorAnimationsController = require(ReplicatedStorage.Modules.Survivors
 local oldFacingStraight = SurvivorAnimationsController._isFacingStraightEnough
 SurvivorAnimationsController._isFacingStraightEnough = function(...)
     if autoPalletVaultEnabled or autoWindowVaultEnabled then
-        return true  -- skip angle check entirely
+        return true
     end
-    return oldFacingStraight and oldFacingStraight(...)
+    return oldFacingStraight(...)
 end
 
 -- Helper to check if the caller stack contains target action/animation modules
@@ -718,9 +709,8 @@ local COOLDOWN = 1.5 -- Seconds cooldown before allowing the same window/pallet 
 local connection
 connection = RunService.Heartbeat:Connect(function()
     if not (autoPalletVaultEnabled or autoWindowVaultEnabled) then return end
-
-    -- ponytail: read cached controller only — never call getgc here
-    local c = controller
+    
+    local c = getController()
     if not c then return end
     tryHookController(c)
 
@@ -741,10 +731,7 @@ connection = RunService.Heartbeat:Connect(function()
     end
 
     local state = c.proximity and c.proximity.state
-    if not state then
-        isNearVaultTarget = false
-        return
-    end
+    if not state then return end
 
     local now = tick()
 
@@ -752,7 +739,6 @@ connection = RunService.Heartbeat:Connect(function()
     if autoWindowVaultEnabled then
         local vaultPoint = state.vaultPoint
         if vaultPoint then
-            isNearVaultTarget = true
             if vaultPoint ~= lastActionInstance or (now - lastActionTime) > COOLDOWN then
                 lastActionInstance = vaultPoint
                 lastActionTime = now
@@ -768,7 +754,6 @@ connection = RunService.Heartbeat:Connect(function()
     if autoPalletVaultEnabled then
         local palletSlidePoint = state.palletSlidePoint
         if palletSlidePoint then
-            isNearVaultTarget = true
             if palletSlidePoint ~= lastActionInstance or (now - lastActionTime) > COOLDOWN then
                 lastActionInstance = palletSlidePoint
                 lastActionTime = now
@@ -779,9 +764,6 @@ connection = RunService.Heartbeat:Connect(function()
             return
         end
     end
-
-    -- No target nearby — disable expensive hooks
-    isNearVaultTarget = false
 end)
 
 -- Store the connection in _G so the user can disable/clean it up if they want
@@ -790,50 +772,35 @@ if _G.AutoClimbConnection then
 end
 _G.AutoClimbConnection = connection
 
--- Reset cached controller on respawn so findControllerAsync re-searches for the new round
-localPlayer.CharacterAdded:Connect(function()
-    _G.AutoVaultController = nil
-    controller = nil
-    getSprintHooked = false
-    findControllerAsync()
-end)
-
 print("Auto Climb (Fast Window/Pallet) successfully loaded!")
 
 
 --Unlimited Vault Window
 -- Bypasses the window block / spike spawning mechanism after 3 vaults.
 
--- Hook __namecall (onNamecall does not exist in Madium executor)
-if _G.AutoUnlimitedVaultNC then
-    pcall(function() hookmetamethod(game, "__namecall", _G.AutoUnlimitedVaultNC) end)
-    _G.AutoUnlimitedVaultNC = nil
-end
-local oldNC
-oldNC = hookmetamethod(game, "__namecall", function(self, ...)
-    if not unlimitedVaultEnabled then return oldNC(self, ...) end
-    local method = getnamecallmethod()
+-- Register namecall handler
+onNamecall(function(self, method, ...)
+    if not unlimitedVaultEnabled then return false end
     local args = {...}
-
-    -- Intercept CollectionService:HasTag(obj, "Blocked")
-    if method == "HasTag" and args[1] == "Blocked" then
-        return false
-    -- Intercept CollectionService:GetTagged("Blocked")
+    
+    -- Intercept CollectionService checks for "Blocked" tag
+    if method == "HasTag" and args[2] == "Blocked" then
+        return true, false
     elseif method == "GetTagged" and args[1] == "Blocked" then
-        return {}
-    -- Intercept character __VaultFireCount attribute writes/reads
+        return true, {}
+    
+    -- Intercept Character Attribute set/get for __VaultFireCount to prevent server/client counting
     elseif method == "SetAttribute" and args[1] == "__VaultFireCount" then
-        return oldNC(self, args[1], 0)
+        return true, callOriginal(self, args[1], 0)
     elseif method == "GetAttribute" and args[1] == "__VaultFireCount" then
-        return 0
+        return true, 0
     end
-
-    return oldNC(self, ...)
+    
+    return false
 end)
-_G.AutoUnlimitedVaultNC = oldNC  -- store original so we can restore on reinject
 
 -- Listen for character respawning to reset attribute on new character
-localPlayer.CharacterAdded:Connect(function(newChar)
+Players.LocalPlayer.CharacterAdded:Connect(function(newChar)
     if unlimitedVaultEnabled then
         task.wait(1)
         pcall(function()
@@ -1200,9 +1167,7 @@ local function startPlayer()
     local function setup(plr: Player)
         if plr == LocalPlayer then return end
         local function onChar(char: Model)
-            task.spawn(function()
-                -- ponytail: wait for HumanoidRootPart to avoid race condition where parts are not loaded yet on spawn/join
-                char:WaitForChild("HumanoidRootPart", 5)
+            task.defer(function()
                 if isKindActive("Player") and char.Parent and not tracked[char] then
                     applyPlayer(char, plr)
                     pushConn("Player", char.AncestryChanged:Connect(function(_, parent)
@@ -1337,9 +1302,6 @@ local Logic = {
         end,
         SetAutoWindowVault = function(enabled: boolean)
             autoWindowVaultEnabled = enabled
-        end,
-        SetUnlimitedVault = function(enabled: boolean)
-            unlimitedVaultEnabled = enabled
         end
     },
     ESP = ESP,
