@@ -694,6 +694,15 @@ local lastActionInstance = nil
 local COOLDOWN = 1.5
 
 local connection = RunService.Heartbeat:Connect(function()
+    if unlimitedVaultEnabled then
+        local char = LocalPlayer.Character
+        if char then
+            if char:GetAttribute("__VaultFireCount") and char:GetAttribute("__VaultFireCount") > 0 then
+                pcall(function() char:SetAttribute("__VaultFireCount", 0) end)
+            end
+        end
+    end
+
     if not (autoPalletVaultEnabled or autoWindowVaultEnabled) then return end
 
     local c = getController()
