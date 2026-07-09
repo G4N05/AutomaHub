@@ -51,12 +51,14 @@ end)()
 local Combat = Logic and Logic.Combat
 local ESP = Logic and Logic.ESP
 local Aim = Logic and Logic.Aim
+local Anti = Logic and Logic.Anti
 
 -- Create Tabs
 local ThemeTab = Window:Tab({ Title = "Theme", Icon = "palette" })
 local CombatTab = Window:Tab({ Title = "Combat", Icon = "swords" })
 local VisualTab = Window:Tab({ Title = "Visual", Icon = "eye" })
 local AimTab = Window:Tab({ Title = "Aim", Icon = "crosshair" })
+local AntiTab = Window:Tab({ Title = "Anti", Icon = "shield-ban" })
 
 -- Combat Tab Sections (Tidied and organized)
 local ParrySection = CombatTab:Section({ Title = "Auto Parry Settings" })
@@ -355,6 +357,19 @@ AimVeilSection:Toggle({
     Callback = function(value: boolean)
         if Aim and Aim.SetVeilEnableLead then
             Aim.SetVeilEnableLead(value)
+        end
+    end
+})
+
+-- Anti Tab Settings
+local AntiSection = AntiTab:Section({ Title = "Anti Settings" })
+AntiSection:Toggle({
+    Title = "Anti Auto Parry",
+    Desc = "Bait and block enemy auto parry behaviors",
+    Value = false,
+    Callback = function(value: boolean)
+        if Anti and Anti.SetAntiAutoParry then
+            Anti.SetAntiAutoParry(value)
         end
     end
 })

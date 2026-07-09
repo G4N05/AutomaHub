@@ -59,6 +59,7 @@ local TRIGGER_DISTANCE = 13.2
 local autoPalletVaultEnabled = false
 local autoWindowVaultEnabled = false
 local unlimitedVaultEnabled = false
+local antiParryActive = false
 
 -- ============================================================
 -- SHARED: namecall hook infra (buat silent aim / bypass)
@@ -1350,6 +1351,11 @@ local Logic = {
         SetVeilShowFov = function(value: boolean)
             AIM_CONFIG.veilShowFov = value
         end,
+    },
+    Anti = {
+        SetAntiAutoParry = function(enabled: boolean)
+            antiParryActive = enabled
+        end
     }
 }
 
@@ -1761,6 +1767,45 @@ initVeil()
 installNamecallHook()
 
 print("[Aim Hub] Pistol & Veil script loaded. Silent aim supported: " .. tostring(silentSupported))
+
+--Anti Auto Parry
+local baitAnim = Instance.new("Animation")
+baitAnim.AnimationId = "rbxassetid://117042998468241"
+
+task.spawn(function()
+    while true do
+        task.wait(0.3)
+        if not antiParryActive then continue end
+        
+        local char = LocalPlayer.Character
+        local myRoot = char and char:FindFirstChild("HumanoidRootPart")
+        local hum = char and char:FindFirstChildOfClass("Humanoid")
+        local animator = hum and hum:FindFirstChildOfClass("Animator")
+        
+        if myRoot and animator then
+            local near = false
+            for _, p in ipairs(Players:GetPlayers()) do
+                if p ~= LocalPlayer and p.Team and p.Team.Name == "Survivors" then
+                    local r = p.Character and p.Character:FindFirstChild("HumanoidRootPart")
+                    if r and (myRoot.Position - r.Position).Magnitude <= 15 then
+                        near = true
+                        break
+                    end
+                end
+            end
+            
+            if near then
+                local ok, track = pcall(function() return animator:LoadAnimation(baitAnim) end)
+                if ok and track then
+                    track:Play()
+                    track:AdjustWeight(0) -- event AnimationPlayed terpancar, killer tetap diam
+                    task.wait(0.05)
+                    track:Stop()
+                end
+            end
+        end
+    end
+end)
 
 getgenv().AutomaHubLogic = Logic
 return Logic
