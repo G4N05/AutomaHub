@@ -56,6 +56,9 @@ local dodgeDistance = 25
 local autoPalletEnabled = false
 local TRIGGER_DISTANCE = 13.2
 
+local autoWindowVaultEnabled = false
+local autoPalletVaultEnabled = false
+
 -- Optimized Heartbeat for Killer Tracking (Only runs when Combat features are active)
 RunService.Heartbeat:Connect(function()
     if not autoParryEnabled and not autoDodgeEnabled then return end
@@ -583,135 +586,47 @@ end
 _G.AutoPalletConnection = connection
 print("Auto Pallet Drop Script updated and optimized!")
 
--- Auto Vaulth
+-- =====================================================================
+-- Auto Vault
+-- =====================================================================
 
-local Players = game:GetService("Players")
-local ReplicatedStorage = game:GetService("ReplicatedStorage")
-local RunService = game:GetService("RunService")
-
-local localPlayer = Players.LocalPlayer
-
--- Function to find the active survivor controller in the garbage collector
-local function getController()
-    for _, v in ipairs(getgc(true)) do
-        if type(v) == "table" and type(rawget(v, "startCooldown")) == "function" and type(rawget(v, "prompts")) == "table" then
-            return v
-        end
-    end
-    return nil
+-- Window Vault: strips "Blocked" tag so windows are always vaultable
+if _G.UnlimitedVaultConn then
+    _G.UnlimitedVaultConn:Disconnect()
+    _G.UnlimitedVaultConn = nil
 end
-
-local controller = getController()
-if not controller then
-    warn("Controller not found! Make sure you are spawned in the round.")
-    return
-end
-
-print("Survivor controller found:", controller)
-
--- Import the necessary game modules
-local SurvivorActions = require(ReplicatedStorage.Modules.Survivors.SurvivorActions)
-local SurvivorAnimationsController = require(ReplicatedStorage.Modules.Survivors.SurvivorAnimationsController)
-
--- Hook 1: Overwrite _isFacingStraightEnough to always return true (allows vaulting from any angle)
-SurvivorAnimationsController._isFacingStraightEnough = function()
-    return true
-end
-
--- Helper to check if the caller stack contains target action/animation modules
-local function isCalledFromTarget()
-    for i = 2, 12 do
-        local ok, src = pcall(debug.info, i, "s")
-        if not ok or not src then break end
-        if src:find("SurvivorAnimationsController") or src:find("SurvivorActions") or src:find("CheckInterractable") then
-            return true
-        end
-    end
-    return false
-end
-
--- Hook 2: Hook the Velocity property of HumanoidRootPart to trick the animation script into thinking we have speed > 15.25 (triggers fastvault)
-local oldIndex
-oldIndex = hookmetamethod(game, "__index", function(self, key)
-    if not checkcaller() and key == "Velocity" and self.Name == "HumanoidRootPart" then
-        if isCalledFromTarget() then
-            return Vector3.new(20, 0, 0) -- High speed to trigger fast vault
-        end
-    end
-    return oldIndex(self, key)
-end)
-
--- Hook 3: Hook the controller's getSprintFlag to always return true during vaults/slides
-local oldGetSprintFlag = controller.getSprintFlag
-controller.getSprintFlag = function(self)
-    if isCalledFromTarget() then
-        return true
-    end
-    if oldGetSprintFlag then
-        return oldGetSprintFlag(self)
-    end
-    return self.character:GetAttribute("Sprinting") or false
-end
-
--- Auto-climb loop configurations
-local lastActionTime = 0
-local lastActionInstance = nil
-local COOLDOWN = 1.5 -- Seconds cooldown before allowing the same window/pallet to be climbed again
-
--- Connect to Heartbeat to continuously scan proximity
-local connection
-connection = RunService.Heartbeat:Connect(function()
-    local char = localPlayer.Character
-    if not char then return end
-    local hrp = char:FindFirstChild("HumanoidRootPart")
-    local hum = char:FindFirstChildOfClass("Humanoid")
-    if not hrp or not hum or hum.Health <= 0 then return end
-
-    -- Don't trigger if already doing an action, vaulting, sliding, or dropping a pallet
-    if hrp:HasTag("doing action") then return end
-    if controller.script:GetAttribute("isVaulting") or controller.script:GetAttribute("isSliding") or controller.script:GetAttribute("isDroppingPallet") then
-        return
-    end
-
-    local state = controller.proximity and controller.proximity.state
-    if not state then return end
-
-    local now = tick()
-
-    -- 1. Check for nearby window to vault
-    local vaultPoint = state.vaultPoint
-    if vaultPoint then
-        if vaultPoint ~= lastActionInstance or (now - lastActionTime) > COOLDOWN then
-            lastActionInstance = vaultPoint
-            lastActionTime = now
-            task.spawn(function()
-                SurvivorActions.startVault(controller, vaultPoint)
-            end)
-        end
-        return
-    end
-
-    -- 2. Check for nearby pallet to slide over
-    local palletSlidePoint = state.palletSlidePoint
-    if palletSlidePoint then
-        if palletSlidePoint ~= lastActionInstance or (now - lastActionTime) > COOLDOWN then
-            lastActionInstance = palletSlidePoint
-            lastActionTime = now
-            task.spawn(function()
-                SurvivorActions.startPalletSlide(controller, palletSlidePoint)
-            end)
-        end
-        return
+_G.UnlimitedVaultConn = CollectionService:GetInstanceAddedSignal("Blocked"):Connect(function(instance)
+    if autoWindowVaultEnabled then
+        CollectionService:RemoveTag(instance, "Blocked")
     end
 end)
 
--- Store the connection in _G so the user can disable/clean it up if they want
-if _G.AutoClimbConnection then
-    _G.AutoClimbConnection:Disconnect()
+-- Pallet Vault: strips "PalletBlocked" tag so pallets are always vaultable
+if _G.PalletVaultConn then
+    _G.PalletVaultConn:Disconnect()
+    _G.PalletVaultConn = nil
 end
-_G.AutoClimbConnection = connection
+_G.PalletVaultConn = CollectionService:GetInstanceAddedSignal("PalletBlocked"):Connect(function(instance)
+    if autoPalletVaultEnabled then
+        CollectionService:RemoveTag(instance, "PalletBlocked")
+    end
+end)
 
-print("Auto Climb (Fast Window/Pallet) successfully loaded!")
+-- Helper to flush existing blocked tags based on current toggle state
+local function flushBlockedTags()
+    if autoWindowVaultEnabled then
+        for _, v in ipairs(CollectionService:GetTagged("Blocked")) do
+            CollectionService:RemoveTag(v, "Blocked")
+        end
+    end
+    if autoPalletVaultEnabled then
+        for _, v in ipairs(CollectionService:GetTagged("PalletBlocked")) do
+            CollectionService:RemoveTag(v, "PalletBlocked")
+        end
+    end
+end
+
+getgenv().__autoVaultFlush = flushBlockedTags
 
 -- VISUAL (ESP) MODULE
 
@@ -1198,6 +1113,14 @@ local Logic = {
         end,
         SetPalletDistance = function(dist: number)
             TRIGGER_DISTANCE = dist
+        end,
+        SetAutoWindowVault = function(enabled: boolean)
+            autoWindowVaultEnabled = enabled
+            if getgenv().__autoVaultFlush then getgenv().__autoVaultFlush() end
+        end,
+        SetAutoPalletVault = function(enabled: boolean)
+            autoPalletVaultEnabled = enabled
+            if getgenv().__autoVaultFlush then getgenv().__autoVaultFlush() end
         end
     },
     ESP = ESP,
