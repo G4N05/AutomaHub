@@ -756,9 +756,7 @@ local function updateUnlimitedVault()
         end
 
         _G.UnlimitedVaultConn = CollectionService:GetInstanceAddedSignal("Blocked"):Connect(function(instance)
-            if unlimitedVaultEnabled then
-                CollectionService:RemoveTag(instance, "Blocked")
-            end
+            CollectionService:RemoveTag(instance, "Blocked")
         end)
     end
 end
