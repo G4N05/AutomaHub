@@ -631,22 +631,29 @@ local RunService = game:GetService("RunService")
 
 local localPlayer = Players.LocalPlayer
 
--- ponytail: find controller dynamically instead of blocking initialization if not spawned yet
-local controller = nil
+-- ponytail: search controller ONCE in background, cache in _G to survive reinjects
+-- getgc(true) costs 4.7ms per call — never call it in Heartbeat
+local controller = _G.AutoVaultController or nil
 local getSprintHooked = false
--- ponytail: cheap gate — only true when proximity state has a vault/pallet target nearby
 local isNearVaultTarget = false
 
-local function getController()
-    if controller then return controller end
-    for _, v in ipairs(getgc(true)) do
-        if type(v) == "table" and type(rawget(v, "startCooldown")) == "function" and type(rawget(v, "prompts")) == "table" then
-            controller = v
-            break
+-- One-shot background search — retries every 0.5s until found
+local function findControllerAsync()
+    if controller then return end
+    task.defer(function()
+        while not controller do
+            for _, v in ipairs(getgc(true)) do
+                if type(v) == "table" and type(rawget(v, "startCooldown")) == "function" and type(rawget(v, "prompts")) == "table" then
+                    controller = v
+                    _G.AutoVaultController = v -- cache for reinjects
+                    break
+                end
+            end
+            if not controller then task.wait(0.5) end
         end
-    end
-    return controller
+    end)
 end
+findControllerAsync()
 
 -- Import the necessary game modules
 local SurvivorActions = require(ReplicatedStorage.Modules.Survivors.SurvivorActions)
@@ -713,8 +720,9 @@ local COOLDOWN = 1.5 -- Seconds cooldown before allowing the same window/pallet 
 local connection
 connection = RunService.Heartbeat:Connect(function()
     if not (autoPalletVaultEnabled or autoWindowVaultEnabled) then return end
-    
-    local c = getController()
+
+    -- ponytail: read cached controller only — never call getgc here
+    local c = controller
     if not c then return end
     tryHookController(c)
 
