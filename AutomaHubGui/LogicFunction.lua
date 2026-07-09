@@ -583,9 +583,180 @@ end
 _G.AutoPalletConnection = connection
 print("Auto Pallet Drop Script updated and optimized!")
 
--- =====================================================================
+-- Auto Vaulth
+
+local Players = game:GetService("Players")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local RunService = game:GetService("RunService")
+
+local localPlayer = Players.LocalPlayer
+
+local autoVaultWindowEnabled = false
+local autoVaultPalletEnabled = false
+
+-- Function to find the active survivor controller in the garbage collector
+local function getController()
+    for _, v in ipairs(getgc(true)) do
+        if type(v) == "table" and type(rawget(v, "startCooldown")) == "function" and type(rawget(v, "prompts")) == "table" then
+            return v
+        end
+    end
+    return nil
+end
+
+local controller = nil
+local oldGetSprintFlag = nil
+local hookSprintFlagDone = false
+local lastControllerCheck = 0
+
+-- Helper to check if the caller stack contains target action/animation modules
+local function isCalledFromTarget()
+    for i = 2, 12 do
+        local ok, src = pcall(debug.info, i, "s")
+        if not ok or not src then break end
+        if src:find("SurvivorAnimationsController") or src:find("SurvivorActions") or src:find("CheckInterractable") then
+            return true
+        end
+    end
+    return false
+end
+
+local function tryHookController()
+    if hookSprintFlagDone then return true end
+    local now = tick()
+    if now - lastControllerCheck < 2 then return false end
+    lastControllerCheck = now
+
+    controller = getController()
+    if not controller then return false end
+
+    -- Hook 3: Hook the controller's getSprintFlag to always return true during vaults/slides
+    oldGetSprintFlag = controller.getSprintFlag
+    controller.getSprintFlag = function(self)
+        if (autoVaultWindowEnabled or autoVaultPalletEnabled) and isCalledFromTarget() then
+            return true
+        end
+        if oldGetSprintFlag then
+            return oldGetSprintFlag(self)
+        end
+        if self.character then
+            return self.character:GetAttribute("Sprinting") or false
+        end
+        return false
+    end
+    hookSprintFlagDone = true
+    return true
+end
+
+-- Import the necessary game modules
+local SurvivorActions = nil
+local SurvivorAnimationsController = nil
+pcall(function()
+    SurvivorActions = require(ReplicatedStorage.Modules.Survivors.SurvivorActions)
+end)
+pcall(function()
+    SurvivorAnimationsController = require(ReplicatedStorage.Modules.Survivors.SurvivorAnimationsController)
+end)
+
+-- Hook 1: Overwrite _isFacingStraightEnough to always return true (allows vaulting from any angle)
+local oldIsFacingStraightEnough = nil
+if SurvivorAnimationsController then
+    oldIsFacingStraightEnough = SurvivorAnimationsController._isFacingStraightEnough
+    SurvivorAnimationsController._isFacingStraightEnough = function(...)
+        if autoVaultWindowEnabled or autoVaultPalletEnabled then
+            return true
+        end
+        if oldIsFacingStraightEnough then
+            return oldIsFacingStraightEnough(...)
+        end
+        return true
+    end
+end
+
+-- Hook 2: Hook the Velocity property of HumanoidRootPart to trick the animation script into thinking we have speed > 15.25 (triggers fastvault)
+local oldIndex
+oldIndex = hookmetamethod(game, "__index", function(self, key)
+    if (autoVaultWindowEnabled or autoVaultPalletEnabled) and not checkcaller() and key == "Velocity" and self.Name == "HumanoidRootPart" then
+        if isCalledFromTarget() then
+            return Vector3.new(20, 0, 0) -- High speed to trigger fast vault
+        end
+    end
+    return oldIndex(self, key)
+end)
+
+-- Auto-climb loop configurations
+local lastActionTime = 0
+local lastActionInstance = nil
+local COOLDOWN = 1.5 -- Seconds cooldown before allowing the same window/pallet to be climbed again
+
+-- Connect to Heartbeat to continuously scan proximity
+local connection
+connection = RunService.Heartbeat:Connect(function()
+    if not autoVaultWindowEnabled and not autoVaultPalletEnabled then return end
+
+    local char = localPlayer.Character
+    if not char then return end
+    local hrp = char:FindFirstChild("HumanoidRootPart")
+    local hum = char:FindFirstChildOfClass("Humanoid")
+    if not hrp or not hum or hum.Health <= 0 then return end
+
+    if not tryHookController() or not controller then return end
+
+    -- Don't trigger if already doing an action, vaulting, sliding, or dropping a pallet
+    if hrp:HasTag("doing action") then return end
+    if controller.script and (controller.script:GetAttribute("isVaulting") or controller.script:GetAttribute("isSliding") or controller.script:GetAttribute("isDroppingPallet")) then
+        return
+    end
+
+    local state = controller.proximity and controller.proximity.state
+    if not state then return end
+
+    local now = tick()
+
+    -- 1. Check for nearby window to vault
+    if autoVaultWindowEnabled then
+        local vaultPoint = state.vaultPoint
+        if vaultPoint then
+            if vaultPoint ~= lastActionInstance or (now - lastActionTime) > COOLDOWN then
+                lastActionInstance = vaultPoint
+                lastActionTime = now
+                if SurvivorActions then
+                    task.spawn(function()
+                        SurvivorActions.startVault(controller, vaultPoint)
+                    end)
+                end
+            end
+            return
+        end
+    end
+
+    -- 2. Check for nearby pallet to slide over
+    if autoVaultPalletEnabled then
+        local palletSlidePoint = state.palletSlidePoint
+        if palletSlidePoint then
+            if palletSlidePoint ~= lastActionInstance or (now - lastActionTime) > COOLDOWN then
+                lastActionInstance = palletSlidePoint
+                lastActionTime = now
+                if SurvivorActions then
+                    task.spawn(function()
+                        SurvivorActions.startPalletSlide(controller, palletSlidePoint)
+                    end)
+                end
+            end
+            return
+        end
+    end
+end)
+
+-- Store the connection in _G so the user can disable/clean it up if they want
+if _G.AutoClimbConnection then
+    _G.AutoClimbConnection:Disconnect()
+end
+_G.AutoClimbConnection = connection
+
+print("Auto Climb (Fast Window/Pallet) successfully loaded!")
+
 -- VISUAL (ESP) MODULE
--- =====================================================================
 
 local COLOR_GEN     = Color3.fromRGB(85, 255, 85)
 local COLOR_PALLET  = Color3.fromRGB(255, 215, 0)
@@ -1070,6 +1241,12 @@ local Logic = {
         end,
         SetPalletDistance = function(dist: number)
             TRIGGER_DISTANCE = dist
+        end,
+        SetAutoVaultWindow = function(enabled: boolean)
+            autoVaultWindowEnabled = enabled
+        end,
+        SetAutoVaultPallet = function(enabled: boolean)
+            autoVaultPalletEnabled = enabled
         end
     },
     ESP = ESP,
