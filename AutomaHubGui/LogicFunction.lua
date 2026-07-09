@@ -1327,6 +1327,10 @@ local function initVeil()
     local veilLockedPlayer = nil
     local veilLockGraceUntil = 0
 
+    local mobileAttackHeld = false
+    local lastBtn = nil
+    local connBegan, connEnded
+
     local function veilGetFovCenter() if veilFovFollowMouse then local m = UserInputService:GetMouseLocation() return Vector2.new(m.X, m.Y) end local vp = Workspace.CurrentCamera.ViewportSize return Vector2.new(vp.X/2, vp.Y/2) end
     local function veilGetPart(plr) return plr and plr.Character and plr.Character:FindFirstChild(VEIL_TARGET_PART) end
 
@@ -1408,9 +1412,47 @@ local function initVeil()
             return
         end
         if veilFovCircle then veilFovCircle.Visible = AIM_CONFIG.veilShowFov veilFovCircle.Radius = AIM_CONFIG.veilFovRadius veilFovCircle.Position = veilGetFovCenter() end
-        local stanceChar = LocalPlayer.Character
-        local inThrowStance = stanceChar and stanceChar:GetAttribute("spearmode") == true
-        local holding = inThrowStance == true
+        local playerGui = LocalPlayer:FindFirstChildOfClass("PlayerGui")
+        local attackBtn = playerGui
+            and playerGui:FindFirstChild("Slasher-mob")
+            and playerGui["Slasher-mob"]:FindFirstChild("Controls")
+            and playerGui["Slasher-mob"].Controls:FindFirstChild("attack")
+
+        if attackBtn ~= lastBtn then
+            if connBegan then connBegan:Disconnect() connBegan = nil end
+            if connEnded then connEnded:Disconnect() connEnded = nil end
+            if getgenv then
+                local g = getgenv()
+                if g.__tomaVeilBegan then pcall(function() g.__tomaVeilBegan:Disconnect() end) g.__tomaVeilBegan = nil end
+                if g.__tomaVeilEnded then pcall(function() g.__tomaVeilEnded:Disconnect() end) g.__tomaVeilEnded = nil end
+            end
+            mobileAttackHeld = false
+            lastBtn = attackBtn
+            if attackBtn then
+                connBegan = attackBtn.InputBegan:Connect(function(input)
+                    if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+                        mobileAttackHeld = true
+                    end
+                end)
+                connEnded = attackBtn.InputEnded:Connect(function(input)
+                    if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+                        mobileAttackHeld = false
+                    end
+                end)
+                if getgenv then
+                    local g = getgenv()
+                    g.__tomaVeilBegan = connBegan
+                    g.__tomaVeilEnded = connEnded
+                end
+            end
+        end
+
+        local holding = false
+        if UserInputService.TouchEnabled then
+            holding = mobileAttackHeld
+        else
+            holding = UserInputService:IsMouseButtonPressed(Enum.UserInputType.MouseButton1)
+        end
         local target
         if holding then
             if not veilLockedPlayer then veilLockedPlayer = veilGetTarget() end
@@ -1467,6 +1509,8 @@ local function initVeil()
         g.__tomaVeilRender = veilRenderConn
         if g.__tomaVeilFov then pcall(function() g.__tomaVeilFov:Remove() end) end
         g.__tomaVeilFov = veilFovCircle
+        if g.__tomaVeilBegan then pcall(function() g.__tomaVeilBegan:Disconnect() end) g.__tomaVeilBegan = nil end
+        if g.__tomaVeilEnded then pcall(function() g.__tomaVeilEnded:Disconnect() end) g.__tomaVeilEnded = nil end
     end
 end
 
