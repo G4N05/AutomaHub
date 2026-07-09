@@ -694,6 +694,15 @@ local lastActionInstance = nil
 local COOLDOWN = 1.5
 
 local connection = RunService.Heartbeat:Connect(function()
+    if unlimitedVaultEnabled then
+        local char = LocalPlayer.Character
+        if char then
+            if char:GetAttribute("__VaultFireCount") and char:GetAttribute("__VaultFireCount") > 0 then
+                pcall(function() char:SetAttribute("__VaultFireCount", 0) end)
+            end
+        end
+    end
+
     if not (autoPalletVaultEnabled or autoWindowVaultEnabled) then return end
 
     local c = getController()
@@ -755,20 +764,27 @@ print("Auto Climb (Fast Window/Pallet) successfully loaded!")
 
 
 -- Unlimited Window Vault
--- ponytail: Matches exact user snippet to bypass 3-vault block.
+-- ponytail: v2 clears client-side "Blocked" tag so the scanner always finds windows.
 local function updateUnlimitedVault()
+    warn("[AutomaHub DEBUG] updateUnlimitedVault running, unlimitedVaultEnabled =", unlimitedVaultEnabled)
     if _G.UnlimitedVaultConn then
+        warn("[AutomaHub DEBUG] Disconnecting old UnlimitedVaultConn connection")
         pcall(function() _G.UnlimitedVaultConn:Disconnect() end)
         _G.UnlimitedVaultConn = nil
     end
 
     if unlimitedVaultEnabled then
-        for _, v in ipairs(CollectionService:GetTagged("Blocked")) do
+        local blockedItems = CollectionService:GetTagged("Blocked")
+        warn("[AutomaHub DEBUG] Found", #blockedItems, "already-blocked items to clean")
+        for _, v in ipairs(blockedItems) do
             CollectionService:RemoveTag(v, "Blocked")
+            warn("[AutomaHub DEBUG] Cleared Blocked tag from existing item:", v.Name)
         end
 
         _G.UnlimitedVaultConn = CollectionService:GetInstanceAddedSignal("Blocked"):Connect(function(instance)
+            warn("[AutomaHub DEBUG] New Blocked tag detected on:", instance.Name)
             CollectionService:RemoveTag(instance, "Blocked")
+            warn("[AutomaHub DEBUG] Stripped Blocked tag from new item:", instance.Name)
         end)
     end
 end
@@ -1271,6 +1287,7 @@ local Logic = {
             autoWindowVaultEnabled = enabled
         end,
         SetUnlimitedVault = function(enabled: boolean)
+            warn("[AutomaHub DEBUG] SetUnlimitedVault callback fired with:", enabled)
             unlimitedVaultEnabled = enabled
             updateUnlimitedVault()
         end
