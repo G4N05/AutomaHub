@@ -683,8 +683,7 @@ end
 -- Hook 2: Hook the Velocity property of HumanoidRootPart to trick the animation script into thinking we have speed > 15.25 (triggers fastvault)
 local oldIndex
 oldIndex = hookmetamethod(game, "__index", function(self, key)
-    -- ponytail: check cheap flag first; skip expensive stack walk when not near any target
-    if isNearVaultTarget and (autoPalletVaultEnabled or autoWindowVaultEnabled) and not checkcaller() and key == "Velocity" and self.Name == "HumanoidRootPart" then
+    if (autoPalletVaultEnabled or autoWindowVaultEnabled) and not checkcaller() and key == "Velocity" and self.Name == "HumanoidRootPart" then
         if isCalledFromTarget() then
             return Vector3.new(20, 0, 0) -- High speed to trigger fast vault
         end
@@ -697,8 +696,7 @@ local function tryHookController(c)
     getSprintHooked = true
     local oldGetSprintFlag = c.getSprintFlag
     c.getSprintFlag = function(self)
-        -- ponytail: skip stack walk entirely when not near a vault target
-        if isNearVaultTarget and (autoPalletVaultEnabled or autoWindowVaultEnabled) and isCalledFromTarget() then
+        if (autoPalletVaultEnabled or autoWindowVaultEnabled) and isCalledFromTarget() then
             return true
         end
         if oldGetSprintFlag then
@@ -1324,6 +1322,9 @@ local Logic = {
         end,
         SetAutoWindowVault = function(enabled: boolean)
             autoWindowVaultEnabled = enabled
+        end,
+        SetUnlimitedVault = function(enabled: boolean)
+            unlimitedVaultEnabled = enabled
         end
     },
     ESP = ESP,
