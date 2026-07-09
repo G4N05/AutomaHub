@@ -184,27 +184,29 @@ local function doParryPress()
     local survivorMob = PlayerGui and PlayerGui:FindFirstChild("Survivor-mob")
     local parryButton = survivorMob and survivorMob:FindFirstChild("Controls") and survivorMob.Controls:FindFirstChild("Gui-mob")
 
-    local isMobileButtonActive = false
-    if parryButton and parryButton.Visible then
-        local screenGui = parryButton:FindFirstAncestorOfClass("ScreenGui")
-        if screenGui and screenGui.Enabled then
-            isMobileButtonActive = true
-        end
-    end
+    local isMobile = UserInputService.TouchEnabled 
+        or not UserInputService.KeyboardEnabled 
+        or (PlayerGui and PlayerGui:FindFirstChild("Survivor-mob") ~= nil)
 
-    if isMobileButtonActive and parryButton then
+    warn(("[AutomaHub Debug] doParryPress: isMobile=%s, parryButton=%s"):format(tostring(isMobile), tostring(parryButton ~= nil)))
+
+    if isMobile and parryButton then
         local fired = false
-        if firesignal then
-            firesignal(parryButton.MouseButton1Down)
-            fired = true
-        end
         if getconnections then
-            for _, connection in ipairs(getconnections(parryButton.MouseButton1Down)) do
+            local conns = getconnections(parryButton.MouseButton1Down)
+            warn(("[AutomaHub Debug] getconnections count: %d"):format(#conns))
+            for _, connection in ipairs(conns) do
                 connection:Fire()
                 fired = true
             end
         end
+        if not fired and firesignal then
+            warn("[AutomaHub Debug] falling back to firesignal")
+            firesignal(parryButton.MouseButton1Down)
+            fired = true
+        end
         if not fired then
+            warn("[AutomaHub Debug] falling back to VirtualInputManager for mobile button")
             local pos = parryButton.AbsolutePosition + (parryButton.AbsoluteSize / 2)
             VirtualInputManager:SendMouseButtonEvent(pos.X, pos.Y, 0, true, game)
             task.wait(0.05)
@@ -212,6 +214,7 @@ local function doParryPress()
         end
     else
         -- PC virtual input: right click
+        warn("[AutomaHub Debug] simulating PC right click")
         local viewportSize = Workspace.CurrentCamera and Workspace.CurrentCamera.ViewportSize or Vector2.new(1000, 800)
         local posX = viewportSize.X / 2
         local posY = viewportSize.Y / 2
