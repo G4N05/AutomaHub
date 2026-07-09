@@ -1443,15 +1443,11 @@ local function initVeil()
             mobileAttackHeld = false
             lastBtn = attackBtn
             if attackBtn then
-                connBegan = attackBtn.InputBegan:Connect(function(input)
-                    if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
-                        mobileAttackHeld = true
-                    end
+                connBegan = attackBtn.MouseButton1Down:Connect(function()
+                    mobileAttackHeld = true
                 end)
-                connEnded = attackBtn.InputEnded:Connect(function(input)
-                    if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
-                        mobileAttackHeld = false
-                    end
+                connEnded = attackBtn.MouseButton1Up:Connect(function()
+                    mobileAttackHeld = false
                 end)
                 if getgenv then
                     local g = getgenv()
@@ -1464,8 +1460,12 @@ local function initVeil()
         local stanceChar = LocalPlayer.Character
         local inThrowStance = stanceChar and stanceChar:GetAttribute("spearmode") == true
 
+        local isMobile = UserInputService.TouchEnabled 
+            or not UserInputService.KeyboardEnabled 
+            or (playerGui and playerGui:FindFirstChild("Slasher-mob") ~= nil)
+
         local inputHolding = false
-        if UserInputService.TouchEnabled then
+        if isMobile then
             inputHolding = mobileAttackHeld
         else
             inputHolding = pcAttackHeld
