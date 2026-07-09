@@ -1327,6 +1327,7 @@ local function initVeil()
     local veilLockedPlayer = nil
     local veilLockGraceUntil = 0
 
+    local pcAttackHeld = false
     local mobileAttackHeld = false
     local lastBtn = nil
     local connBegan, connEnded
@@ -1404,6 +1405,19 @@ local function initVeil()
         veilFovCircle.Filled = false veilFovCircle.Visible = false veilFovCircle.Color = Color3.fromRGB(255, 255, 255)
     end
 
+    local connBeganPc = UserInputService.InputBegan:Connect(function(input, gpe)
+        if gpe then return end
+        if input.UserInputType == Enum.UserInputType.MouseButton1 then
+            pcAttackHeld = true
+        end
+    end)
+
+    local connEndedPc = UserInputService.InputEnded:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1 then
+            pcAttackHeld = false
+        end
+    end)
+
     local veilRenderConn = RunService.RenderStepped:Connect(function()
         if not (AIM_CONFIG.veilSilentAim or AIM_CONFIG.veilAimLock) then
             veilTargetPos, veilTargetVel, veilTargetName = nil, nil, nil
@@ -1454,7 +1468,7 @@ local function initVeil()
         if UserInputService.TouchEnabled then
             inputHolding = mobileAttackHeld
         else
-            inputHolding = UserInputService:IsMouseButtonPressed(Enum.UserInputType.MouseButton1)
+            inputHolding = pcAttackHeld
         end
         local holding = inThrowStance and inputHolding
         local target
@@ -1515,6 +1529,10 @@ local function initVeil()
         g.__tomaVeilFov = veilFovCircle
         if g.__tomaVeilBegan then pcall(function() g.__tomaVeilBegan:Disconnect() end) g.__tomaVeilBegan = nil end
         if g.__tomaVeilEnded then pcall(function() g.__tomaVeilEnded:Disconnect() end) g.__tomaVeilEnded = nil end
+        if g.__tomaVeilBeganPc then pcall(function() g.__tomaVeilBeganPc:Disconnect() end) g.__tomaVeilBeganPc = nil end
+        if g.__tomaVeilEndedPc then pcall(function() g.__tomaVeilEndedPc:Disconnect() end) g.__tomaVeilEndedPc = nil end
+        g.__tomaVeilBeganPc = connBeganPc
+        g.__tomaVeilEndedPc = connEndedPc
     end
 end
 
