@@ -624,19 +624,23 @@ end
 _G.AutoPalletConnection = connection
 print("Auto Pallet Drop Script updated and optimized!")
 
--- Auto Vaulth
-local Players = game:GetService("Players")
-local ReplicatedStorage = game:GetService("ReplicatedStorage")
-local RunService = game:GetService("RunService")
+-- Auto Vault
+-- ponytail: v2 removed hookmetamethod and stack scan to eliminate lag. Uses server fastvault fire instead.
+local SurvivorActions = require(ReplicatedStorage.Modules.Survivors.SurvivorActions)
+local SurvivorAnimationsController = require(ReplicatedStorage.Modules.Survivors.SurvivorAnimationsController)
+local fastvault = Remotes:WaitForChild("Window"):WaitForChild("fastvault")
 
-local localPlayer = Players.LocalPlayer
-
--- ponytail: find controller dynamically instead of blocking initialization if not spawned yet
 local controller = nil
 local getSprintHooked = false
+local lastScanTime = 0
 
+-- ponytail: throttled GC scan to prevent frame lag when controller is not found yet
 local function getController()
     if controller then return controller end
+    local now = tick()
+    if now - lastScanTime < 2.0 then return nil end
+    lastScanTime = now
+
     for _, v in ipairs(getgc(true)) do
         if type(v) == "table" and type(rawget(v, "startCooldown")) == "function" and type(rawget(v, "prompts")) == "table" then
             controller = v
@@ -646,48 +650,24 @@ local function getController()
     return controller
 end
 
--- Import the necessary game modules
-local SurvivorActions = require(ReplicatedStorage.Modules.Survivors.SurvivorActions)
-local SurvivorAnimationsController = require(ReplicatedStorage.Modules.Survivors.SurvivorAnimationsController)
-
--- Hook 1: Overwrite _isFacingStraightEnough to always return true (allows vaulting from any angle)
+-- Overwrite _isFacingStraightEnough to always return true when auto vault is active
 local oldFacingStraight = SurvivorAnimationsController._isFacingStraightEnough
 SurvivorAnimationsController._isFacingStraightEnough = function(...)
     if autoPalletVaultEnabled or autoWindowVaultEnabled then
         return true
     end
-    return oldFacingStraight(...)
-end
-
--- Helper to check if the caller stack contains target action/animation modules
-local function isCalledFromTarget()
-    for i = 2, 12 do
-        local ok, src = pcall(debug.info, i, "s")
-        if not ok or not src then break end
-        if src:find("SurvivorAnimationsController") or src:find("SurvivorActions") or src:find("CheckInterractable") then
-            return true
-        end
+    if oldFacingStraight then
+        return oldFacingStraight(...)
     end
-    return false
+    return true
 end
-
--- Hook 2: Hook the Velocity property of HumanoidRootPart to trick the animation script into thinking we have speed > 15.25 (triggers fastvault)
-local oldIndex
-oldIndex = hookmetamethod(game, "__index", function(self, key)
-    if (autoPalletVaultEnabled or autoWindowVaultEnabled) and not checkcaller() and key == "Velocity" and self.Name == "HumanoidRootPart" then
-        if isCalledFromTarget() then
-            return Vector3.new(20, 0, 0) -- High speed to trigger fast vault
-        end
-    end
-    return oldIndex(self, key)
-end)
 
 local function tryHookController(c)
     if getSprintHooked or not c then return end
     getSprintHooked = true
     local oldGetSprintFlag = c.getSprintFlag
     c.getSprintFlag = function(self)
-        if (autoPalletVaultEnabled or autoWindowVaultEnabled) and isCalledFromTarget() then
+        if autoPalletVaultEnabled or autoWindowVaultEnabled then
             return true
         end
         if oldGetSprintFlag then
@@ -700,73 +680,60 @@ local function tryHookController(c)
     end
 end
 
--- Auto-climb loop configurations
 local lastActionTime = 0
 local lastActionInstance = nil
-local COOLDOWN = 1.5 -- Seconds cooldown before allowing the same window/pallet to be climbed again
+local COOLDOWN = 1.5
 
--- Connect to Heartbeat to continuously scan proximity
-local connection
-connection = RunService.Heartbeat:Connect(function()
+local connection = RunService.Heartbeat:Connect(function()
     if not (autoPalletVaultEnabled or autoWindowVaultEnabled) then return end
-    
+
     local c = getController()
     if not c then return end
     tryHookController(c)
 
-    local char = localPlayer.Character
+    local char = LocalPlayer.Character
     if not char then return end
     local hrp = char:FindFirstChild("HumanoidRootPart")
     local hum = char:FindFirstChildOfClass("Humanoid")
     if not hrp or not hum or hum.Health <= 0 then return end
-
-    -- Don't trigger if already doing an action, vaulting, sliding, or dropping a pallet
     if hrp:HasTag("doing action") then return end
-    
-    local scriptAttr = c.script
-    if scriptAttr then
-        if scriptAttr:GetAttribute("isVaulting") or scriptAttr:GetAttribute("isSliding") or scriptAttr:GetAttribute("isDroppingPallet") then
-            return
-        end
-    end
+
+    local s = c.script
+    if s and (s:GetAttribute("isVaulting") or s:GetAttribute("isSliding") or s:GetAttribute("isDroppingPallet")) then return end
 
     local state = c.proximity and c.proximity.state
     if not state then return end
 
     local now = tick()
 
-    -- 1. Check for nearby window to vault
     if autoWindowVaultEnabled then
         local vaultPoint = state.vaultPoint
         if vaultPoint then
             if vaultPoint ~= lastActionInstance or (now - lastActionTime) > COOLDOWN then
                 lastActionInstance = vaultPoint
                 lastActionTime = now
-                task.spawn(function()
-                    SurvivorActions.startVault(c, vaultPoint)
+                task.spawn(SurvivorActions.startVault, c, vaultPoint)
+                task.delay(0.1, function()
+                    fastvault:FireServer(LocalPlayer)
                 end)
             end
             return
         end
     end
 
-    -- 2. Check for nearby pallet to slide over
     if autoPalletVaultEnabled then
-        local palletSlidePoint = state.palletSlidePoint
-        if palletSlidePoint then
-            if palletSlidePoint ~= lastActionInstance or (now - lastActionTime) > COOLDOWN then
-                lastActionInstance = palletSlidePoint
+        local palletPoint = state.palletSlidePoint
+        if palletPoint then
+            if palletPoint ~= lastActionInstance or (now - lastActionTime) > COOLDOWN then
+                lastActionInstance = palletPoint
                 lastActionTime = now
-                task.spawn(function()
-                    SurvivorActions.startPalletSlide(c, palletSlidePoint)
-                end)
+                task.spawn(SurvivorActions.startPalletSlide, c, palletPoint)
             end
             return
         end
     end
 end)
 
--- Store the connection in _G so the user can disable/clean it up if they want
 if _G.AutoClimbConnection then
     _G.AutoClimbConnection:Disconnect()
 end
