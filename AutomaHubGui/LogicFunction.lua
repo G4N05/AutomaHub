@@ -1332,6 +1332,16 @@ local function initVeil()
     local lastBtn = nil
     local connBegan, connEnded
 
+    local scriptId = tostring(tick()) .. "_" .. tostring(math.random())
+    local marker = LocalPlayer:FindFirstChild("AutomaHubVeilMarker")
+    if not marker then
+        local newMarker = Instance.new("StringValue")
+        newMarker.Name = "AutomaHubVeilMarker"
+        newMarker.Parent = LocalPlayer
+        marker = newMarker
+    end
+    marker.Value = scriptId
+
     local function veilGetFovCenter() if veilFovFollowMouse then local m = UserInputService:GetMouseLocation() return Vector2.new(m.X, m.Y) end local vp = Workspace.CurrentCamera.ViewportSize return Vector2.new(vp.X/2, vp.Y/2) end
     local function veilGetPart(plr) return plr and plr.Character and plr.Character:FindFirstChild(VEIL_TARGET_PART) end
 
@@ -1419,6 +1429,15 @@ local function initVeil()
     end)
 
     local veilRenderConn = RunService.RenderStepped:Connect(function()
+        if marker.Value ~= scriptId then
+            veilRenderConn:Disconnect()
+            if connBegan then connBegan:Disconnect() end
+            if connEnded then connEnded:Disconnect() end
+            if connBeganPc then connBeganPc:Disconnect() end
+            if connEndedPc then connEndedPc:Disconnect() end
+            if veilFovCircle then pcall(function() veilFovCircle:Remove() end) end
+            return
+        end
         if not (AIM_CONFIG.veilSilentAim or AIM_CONFIG.veilAimLock) then
             veilTargetPos, veilTargetVel, veilTargetName = nil, nil, nil
             veilSampleName = nil veilLockedPlayer = nil
