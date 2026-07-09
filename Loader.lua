@@ -5,10 +5,22 @@ local baseUrl = "https://raw.githubusercontent.com/G4N05/AutomaHub/main/"
 getgenv().AutomaHubLoaderModule = true
 
 local function fetchScript(path: string): any
-    if isfile and isfile(path) then
-        return loadstring(readfile(path))()
+    local content
+    if isfile then
+        if isfile(path) then
+            content = readfile(path)
+        elseif isfile("AutomaHub/" .. path) then
+            content = readfile("AutomaHub/" .. path)
+        end
     end
-    return loadstring(game:HttpGet(baseUrl .. path))()
+    if not content then
+        content = game:HttpGet(baseUrl .. path)
+    end
+    local func, err = loadstring(content)
+    if not func then
+        error("Failed to compile script " .. path .. ": " .. tostring(err) .. "\nContent: " .. string.sub(content, 1, 100))
+    end
+    return func()
 end
 
 local successLoader, Loader = pcall(fetchScript, "Load.lua")

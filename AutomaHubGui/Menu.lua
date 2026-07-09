@@ -15,12 +15,15 @@ local Logic = (function()
         if success then return module end
     end
     
-    local ok, fileContent = pcall(readfile, "AutomaHub/AutomaHubGui/LogicFunction.lua")
-    if ok then
-        local loader, err = loadstring(fileContent)
-        if loader then
-            local success, module = pcall(loader)
-            if success and module then return module end
+    local paths = { "AutomaHub/AutomaHubGui/LogicFunction.lua", "AutomaHubGui/LogicFunction.lua" }
+    for _, path in ipairs(paths) do
+        local ok, fileContent = pcall(readfile, path)
+        if ok then
+            local loader, err = loadstring(fileContent)
+            if loader then
+                local success, module = pcall(loader)
+                if success and module then return module end
+            end
         end
     end
     
