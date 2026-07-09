@@ -742,39 +742,29 @@ _G.AutoClimbConnection = connection
 print("Auto Climb (Fast Window/Pallet) successfully loaded!")
 
 
---Unlimited Vault Window
--- Bypasses the window block / spike spawning mechanism after 3 vaults.
-
--- Register namecall handler
-onNamecall(function(self, method, ...)
-    if not unlimitedVaultEnabled then return false end
-    local args = {...}
-    
-    -- Intercept CollectionService checks for "Blocked" tag
-    if method == "HasTag" and args[2] == "Blocked" then
-        return true, false
-    elseif method == "GetTagged" and args[1] == "Blocked" then
-        return true, {}
-    
-    -- Intercept Character Attribute set/get for __VaultFireCount to prevent server/client counting
-    elseif method == "SetAttribute" and args[1] == "__VaultFireCount" then
-        return true, callOriginal(self, args[1], 0)
-    elseif method == "GetAttribute" and args[1] == "__VaultFireCount" then
-        return true, 0
+-- Unlimited Window Vault
+-- ponytail: v2 clears client-side "Blocked" tag so the scanner always finds windows.
+local function updateUnlimitedVault()
+    if _G.UnlimitedVaultConn then
+        pcall(function() _G.UnlimitedVaultConn:Disconnect() end)
+        _G.UnlimitedVaultConn = nil
     end
-    
-    return false
-end)
 
--- Listen for character respawning to reset attribute on new character
-Players.LocalPlayer.CharacterAdded:Connect(function(newChar)
     if unlimitedVaultEnabled then
-        task.wait(1)
-        pcall(function()
-            newChar:SetAttribute("__VaultFireCount", 0)
+        for _, v in ipairs(CollectionService:GetTagged("Blocked")) do
+            CollectionService:RemoveTag(v, "Blocked")
+        end
+
+        _G.UnlimitedVaultConn = CollectionService:GetInstanceAddedSignal("Blocked"):Connect(function(instance)
+            if unlimitedVaultEnabled then
+                CollectionService:RemoveTag(instance, "Blocked")
+            end
         end)
     end
-end)
+end
+
+-- Run once on startup if already enabled
+updateUnlimitedVault()
 
 print("Unlimited Window Vault successfully loaded!")
 
@@ -1272,6 +1262,7 @@ local Logic = {
         end,
         SetUnlimitedVault = function(enabled: boolean)
             unlimitedVaultEnabled = enabled
+            updateUnlimitedVault()
         end
     },
     ESP = ESP,
