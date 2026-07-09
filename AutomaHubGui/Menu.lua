@@ -159,6 +159,17 @@ VaultSection:Toggle({
     end
 })
 
+VaultSection:Toggle({
+    Title = "Unlimited vault Window",
+    Desc = "Bypass the 3-vault block restriction on windows",
+    Value = false,
+    Callback = function(value: boolean)
+        if Combat and Combat.SetUnlimitedVault then
+            Combat.SetUnlimitedVault(value)
+        end
+    end
+})
+
 local SkillcheckSection = CombatTab:Section({ Title = "Skillcheck Settings" })
 SkillcheckSection:Toggle({
     Title = "Auto Skillcheck",
