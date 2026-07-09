@@ -739,52 +739,25 @@ print("Auto Climb (Fast Window/Pallet) successfully loaded!")
 
 --Unlimited Vault Window
 
--- Bypasses the window block / spike spawning mechanism after 3 vaults.
+-- Unlimited Window Vault - Violence District
+-- Removes the "Blocked" CollectionService tag from windows client-side
+-- so the proximity scanner always finds windows even when killer is nearby.
+-- The tag is server-applied but client can remove it locally (client-side only bypass).
 
 local CollectionService = game:GetService("CollectionService")
-local Players = game:GetService("Players")
 
--- 1. Remove the "Blocked" tag from any currently blocked windows locally
-for _, inst in ipairs(CollectionService:GetTagged("Blocked")) do
-    CollectionService:RemoveTag(inst, "Blocked")
-    print("Unblocked window at:", inst:GetFullName())
+if _G.UnlimitedVaultConn then
+    _G.UnlimitedVaultConn:Disconnect()
 end
 
--- 2. Hook __namecall to intercept HasTag, GetTagged, and Character Attributes
-local oldNamecall
-oldNamecall = hookmetamethod(game, "__namecall", function(self, ...)
-    local method = getnamecallmethod()
-    local args = {...}
-    
-    -- Intercept CollectionService checks for "Blocked" tag
-    if method == "HasTag" and args[2] == "Blocked" then
-        return false
-    elseif method == "GetTagged" and args[1] == "Blocked" then
-        return {}
-    
-    -- Intercept Character Attribute set/get for __VaultFireCount to prevent server/client counting
-    elseif method == "SetAttribute" and args[1] == "__VaultFireCount" then
-        return oldNamecall(self, args[1], 0)
-    elseif method == "GetAttribute" and args[1] == "__VaultFireCount" then
-        return 0
+-- Watch for new "Blocked" tags being added and instantly strip them
+_G.UnlimitedVaultConn = CollectionService:GetInstanceAddedSignal("Blocked"):Connect(function(instance)
+    if unlimitedVaultEnabled then
+        CollectionService:RemoveTag(instance, "Blocked")
     end
-    
-    return oldNamecall(self, ...)
 end)
 
--- 3. Reset the __VaultFireCount attribute on the current character
-local char = Players.LocalPlayer.Character
-if char then
-    char:SetAttribute("__VaultFireCount", 0)
-end
-
--- 4. Listen for character respawning to reset attribute on new character
-Players.LocalPlayer.CharacterAdded:Connect(function(newChar)
-    task.wait(1)
-    newChar:SetAttribute("__VaultFireCount", 0)
-end)
-
-print("Unlimited Window Vault successfully loaded!")
+print("Unlimited Window Vault loaded - listener active!")
 
 -- VISUAL (ESP) MODULE
 
@@ -1277,6 +1250,14 @@ local Logic = {
         end,
         SetAutoWindowVault = function(enabled: boolean)
             autoWindowVaultEnabled = enabled
+        end,
+        SetUnlimitedVault = function(enabled: boolean)
+            unlimitedVaultEnabled = enabled
+            if enabled then
+                for _, v in ipairs(CollectionService:GetTagged("Blocked")) do
+                    CollectionService:RemoveTag(v, "Blocked")
+                end
+            end
         end
     },
     ESP = ESP,
