@@ -1179,7 +1179,9 @@ local function startPlayer()
     local function setup(plr: Player)
         if plr == LocalPlayer then return end
         local function onChar(char: Model)
-            task.defer(function()
+            task.spawn(function()
+                -- ponytail: wait for HumanoidRootPart to avoid race condition where parts are not loaded yet on spawn/join
+                char:WaitForChild("HumanoidRootPart", 5)
                 if isKindActive("Player") and char.Parent and not tracked[char] then
                     applyPlayer(char, plr)
                     pushConn("Player", char.AncestryChanged:Connect(function(_, parent)
