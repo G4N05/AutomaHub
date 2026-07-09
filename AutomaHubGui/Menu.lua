@@ -28,8 +28,17 @@ local Logic = (function()
     end
     
     local ok2, remoteContent = pcall(game.HttpGet, game, "https://raw.githubusercontent.com/G4N05/AutomaHub/main/AutomaHubGui/LogicFunction.lua")
-    if ok2 then
+    if ok2 and not remoteContent:find("Too Many Requests") and not remoteContent:find("429") then
         local loader, err = loadstring(remoteContent)
+        if loader then
+            local success, module = pcall(loader)
+            if success and module then return module end
+        end
+    end
+    
+    local ok3, cdnContent = pcall(game.HttpGet, game, "https://cdn.jsdelivr.net/gh/G4N05/AutomaHub@main/AutomaHubGui/LogicFunction.lua")
+    if ok3 then
+        local loader, err = loadstring(cdnContent)
         if loader then
             local success, module = pcall(loader)
             if success and module then return module end

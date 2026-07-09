@@ -8,13 +8,26 @@ local function fetchScript(path: string): any
     local content
     if isfile then
         if isfile(path) then
-            content = readfile(path)
+            pcall(function() content = readfile(path) end)
         elseif isfile("AutomaHub/" .. path) then
-            content = readfile("AutomaHub/" .. path)
+            pcall(function() content = readfile("AutomaHub/" .. path) end)
         end
     end
     if not content then
-        content = game:HttpGet(baseUrl .. path)
+        local ok, res = pcall(game.HttpGet, game, baseUrl .. path)
+        if ok and res and not res:find("Too Many Requests") and not res:find("429") then
+            content = res
+        end
+    end
+    if not content then
+        local cdnUrl = "https://cdn.jsdelivr.net/gh/G4N05/AutomaHub@main/"
+        local ok, res = pcall(game.HttpGet, game, cdnUrl .. path)
+        if ok and res then
+            content = res
+        end
+    end
+    if not content then
+        error("Failed to fetch script: " .. path .. " (local, GitHub, and CDN all failed)")
     end
     local func, err = loadstring(content)
     if not func then
