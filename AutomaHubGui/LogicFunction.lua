@@ -590,29 +590,7 @@ print("Auto Pallet Drop Script updated and optimized!")
 -- Auto Vault
 -- =====================================================================
 
--- Window Vault: strips "Blocked" tag so windows are always vaultable
-if _G.UnlimitedVaultConn then
-    _G.UnlimitedVaultConn:Disconnect()
-    _G.UnlimitedVaultConn = nil
-end
-_G.UnlimitedVaultConn = CollectionService:GetInstanceAddedSignal("Blocked"):Connect(function(instance)
-    if autoWindowVaultEnabled then
-        CollectionService:RemoveTag(instance, "Blocked")
-    end
-end)
-
--- Pallet Vault: strips "PalletBlocked" tag so pallets are always vaultable
-if _G.PalletVaultConn then
-    _G.PalletVaultConn:Disconnect()
-    _G.PalletVaultConn = nil
-end
-_G.PalletVaultConn = CollectionService:GetInstanceAddedSignal("PalletBlocked"):Connect(function(instance)
-    if autoPalletVaultEnabled then
-        CollectionService:RemoveTag(instance, "PalletBlocked")
-    end
-end)
-
--- Helper to flush existing blocked tags based on current toggle state
+-- Flush helper: strips existing blocked tags based on current toggle state
 local function flushBlockedTags()
     if autoWindowVaultEnabled then
         for _, v in ipairs(CollectionService:GetTagged("Blocked")) do
@@ -625,8 +603,24 @@ local function flushBlockedTags()
         end
     end
 end
-
 getgenv().__autoVaultFlush = flushBlockedTags
+
+-- ponytail: register signals ONCE globally — prevents listener accumulation across script reloads
+if not getgenv().__autoVaultConnInstalled then
+    getgenv().__autoVaultConnInstalled = true
+
+    CollectionService:GetInstanceAddedSignal("Blocked"):Connect(function(instance)
+        if getgenv().__autoWindowVaultEnabled then
+            CollectionService:RemoveTag(instance, "Blocked")
+        end
+    end)
+
+    CollectionService:GetInstanceAddedSignal("PalletBlocked"):Connect(function(instance)
+        if getgenv().__autoPalletVaultEnabled then
+            CollectionService:RemoveTag(instance, "PalletBlocked")
+        end
+    end)
+end
 
 -- VISUAL (ESP) MODULE
 
@@ -1116,10 +1110,12 @@ local Logic = {
         end,
         SetAutoWindowVault = function(enabled: boolean)
             autoWindowVaultEnabled = enabled
+            getgenv().__autoWindowVaultEnabled = enabled
             if getgenv().__autoVaultFlush then getgenv().__autoVaultFlush() end
         end,
         SetAutoPalletVault = function(enabled: boolean)
             autoPalletVaultEnabled = enabled
+            getgenv().__autoPalletVaultEnabled = enabled
             if getgenv().__autoVaultFlush then getgenv().__autoVaultFlush() end
         end
     },
