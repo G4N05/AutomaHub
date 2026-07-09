@@ -136,29 +136,6 @@ PalletSection:Slider({
     end
 })
 
-local VaultSection = CombatTab:Section({ Title = "Vault" })
-VaultSection:Toggle({
-    Title = "Auto Vault Pallet",
-    Desc = "Automatically slide over nearby pallets",
-    Value = false,
-    Callback = function(value: boolean)
-        if Combat and Combat.SetAutoVaultPallet then
-            Combat.SetAutoVaultPallet(value)
-        end
-    end
-})
-
-VaultSection:Toggle({
-    Title = "Auto Vault Window",
-    Desc = "Automatically vault over nearby windows",
-    Value = false,
-    Callback = function(value: boolean)
-        if Combat and Combat.SetAutoVaultWindow then
-            Combat.SetAutoVaultWindow(value)
-        end
-    end
-})
-
 local SkillcheckSection = CombatTab:Section({ Title = "Skillcheck Settings" })
 SkillcheckSection:Toggle({
     Title = "Auto Skillcheck",

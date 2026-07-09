@@ -591,9 +591,6 @@ local RunService = game:GetService("RunService")
 
 local localPlayer = Players.LocalPlayer
 
-local autoVaultWindowEnabled = false
-local autoVaultPalletEnabled = false
-
 -- Function to find the active survivor controller in the garbage collector
 local function getController()
     for _, v in ipairs(getgc(true)) do
@@ -604,10 +601,22 @@ local function getController()
     return nil
 end
 
-local controller = nil
-local oldGetSprintFlag = nil
-local hookSprintFlagDone = false
-local lastControllerCheck = 0
+local controller = getController()
+if not controller then
+    warn("Controller not found! Make sure you are spawned in the round.")
+    return
+end
+
+print("Survivor controller found:", controller)
+
+-- Import the necessary game modules
+local SurvivorActions = require(ReplicatedStorage.Modules.Survivors.SurvivorActions)
+local SurvivorAnimationsController = require(ReplicatedStorage.Modules.Survivors.SurvivorAnimationsController)
+
+-- Hook 1: Overwrite _isFacingStraightEnough to always return true (allows vaulting from any angle)
+SurvivorAnimationsController._isFacingStraightEnough = function()
+    return true
+end
 
 -- Helper to check if the caller stack contains target action/animation modules
 local function isCalledFromTarget()
@@ -621,68 +630,28 @@ local function isCalledFromTarget()
     return false
 end
 
-local function tryHookController()
-    if hookSprintFlagDone then return true end
-    local now = tick()
-    if now - lastControllerCheck < 2 then return false end
-    lastControllerCheck = now
-
-    controller = getController()
-    if not controller then return false end
-
-    -- Hook 3: Hook the controller's getSprintFlag to always return true during vaults/slides
-    oldGetSprintFlag = controller.getSprintFlag
-    controller.getSprintFlag = function(self)
-        if (autoVaultWindowEnabled or autoVaultPalletEnabled) and isCalledFromTarget() then
-            return true
-        end
-        if oldGetSprintFlag then
-            return oldGetSprintFlag(self)
-        end
-        if self.character then
-            return self.character:GetAttribute("Sprinting") or false
-        end
-        return false
-    end
-    hookSprintFlagDone = true
-    return true
-end
-
--- Import the necessary game modules
-local SurvivorActions = nil
-local SurvivorAnimationsController = nil
-pcall(function()
-    SurvivorActions = require(ReplicatedStorage.Modules.Survivors.SurvivorActions)
-end)
-pcall(function()
-    SurvivorAnimationsController = require(ReplicatedStorage.Modules.Survivors.SurvivorAnimationsController)
-end)
-
--- Hook 1: Overwrite _isFacingStraightEnough to always return true (allows vaulting from any angle)
-local oldIsFacingStraightEnough = nil
-if SurvivorAnimationsController then
-    oldIsFacingStraightEnough = SurvivorAnimationsController._isFacingStraightEnough
-    SurvivorAnimationsController._isFacingStraightEnough = function(...)
-        if autoVaultWindowEnabled or autoVaultPalletEnabled then
-            return true
-        end
-        if oldIsFacingStraightEnough then
-            return oldIsFacingStraightEnough(...)
-        end
-        return true
-    end
-end
-
 -- Hook 2: Hook the Velocity property of HumanoidRootPart to trick the animation script into thinking we have speed > 15.25 (triggers fastvault)
 local oldIndex
 oldIndex = hookmetamethod(game, "__index", function(self, key)
-    if (autoVaultWindowEnabled or autoVaultPalletEnabled) and not checkcaller() and key == "Velocity" and self.Name == "HumanoidRootPart" then
+    if not checkcaller() and key == "Velocity" and self.Name == "HumanoidRootPart" then
         if isCalledFromTarget() then
             return Vector3.new(20, 0, 0) -- High speed to trigger fast vault
         end
     end
     return oldIndex(self, key)
 end)
+
+-- Hook 3: Hook the controller's getSprintFlag to always return true during vaults/slides
+local oldGetSprintFlag = controller.getSprintFlag
+controller.getSprintFlag = function(self)
+    if isCalledFromTarget() then
+        return true
+    end
+    if oldGetSprintFlag then
+        return oldGetSprintFlag(self)
+    end
+    return self.character:GetAttribute("Sprinting") or false
+end
 
 -- Auto-climb loop configurations
 local lastActionTime = 0
@@ -692,19 +661,15 @@ local COOLDOWN = 1.5 -- Seconds cooldown before allowing the same window/pallet 
 -- Connect to Heartbeat to continuously scan proximity
 local connection
 connection = RunService.Heartbeat:Connect(function()
-    if not autoVaultWindowEnabled and not autoVaultPalletEnabled then return end
-
     local char = localPlayer.Character
     if not char then return end
     local hrp = char:FindFirstChild("HumanoidRootPart")
     local hum = char:FindFirstChildOfClass("Humanoid")
     if not hrp or not hum or hum.Health <= 0 then return end
 
-    if not tryHookController() or not controller then return end
-
     -- Don't trigger if already doing an action, vaulting, sliding, or dropping a pallet
     if hrp:HasTag("doing action") then return end
-    if controller.script and (controller.script:GetAttribute("isVaulting") or controller.script:GetAttribute("isSliding") or controller.script:GetAttribute("isDroppingPallet")) then
+    if controller.script:GetAttribute("isVaulting") or controller.script:GetAttribute("isSliding") or controller.script:GetAttribute("isDroppingPallet") then
         return
     end
 
@@ -714,37 +679,29 @@ connection = RunService.Heartbeat:Connect(function()
     local now = tick()
 
     -- 1. Check for nearby window to vault
-    if autoVaultWindowEnabled then
-        local vaultPoint = state.vaultPoint
-        if vaultPoint then
-            if vaultPoint ~= lastActionInstance or (now - lastActionTime) > COOLDOWN then
-                lastActionInstance = vaultPoint
-                lastActionTime = now
-                if SurvivorActions then
-                    task.spawn(function()
-                        SurvivorActions.startVault(controller, vaultPoint)
-                    end)
-                end
-            end
-            return
+    local vaultPoint = state.vaultPoint
+    if vaultPoint then
+        if vaultPoint ~= lastActionInstance or (now - lastActionTime) > COOLDOWN then
+            lastActionInstance = vaultPoint
+            lastActionTime = now
+            task.spawn(function()
+                SurvivorActions.startVault(controller, vaultPoint)
+            end)
         end
+        return
     end
 
     -- 2. Check for nearby pallet to slide over
-    if autoVaultPalletEnabled then
-        local palletSlidePoint = state.palletSlidePoint
-        if palletSlidePoint then
-            if palletSlidePoint ~= lastActionInstance or (now - lastActionTime) > COOLDOWN then
-                lastActionInstance = palletSlidePoint
-                lastActionTime = now
-                if SurvivorActions then
-                    task.spawn(function()
-                        SurvivorActions.startPalletSlide(controller, palletSlidePoint)
-                    end)
-                end
-            end
-            return
+    local palletSlidePoint = state.palletSlidePoint
+    if palletSlidePoint then
+        if palletSlidePoint ~= lastActionInstance or (now - lastActionTime) > COOLDOWN then
+            lastActionInstance = palletSlidePoint
+            lastActionTime = now
+            task.spawn(function()
+                SurvivorActions.startPalletSlide(controller, palletSlidePoint)
+            end)
         end
+        return
     end
 end)
 
@@ -1241,12 +1198,6 @@ local Logic = {
         end,
         SetPalletDistance = function(dist: number)
             TRIGGER_DISTANCE = dist
-        end,
-        SetAutoVaultWindow = function(enabled: boolean)
-            autoVaultWindowEnabled = enabled
-        end,
-        SetAutoVaultPallet = function(enabled: boolean)
-            autoVaultPalletEnabled = enabled
         end
     },
     ESP = ESP,
