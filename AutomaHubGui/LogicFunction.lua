@@ -628,7 +628,16 @@ print("Auto Pallet Drop Script updated and optimized!")
 -- ponytail: v2 removed hookmetamethod and stack scan to eliminate lag. Uses server fastvault fire instead.
 local SurvivorActions = require(ReplicatedStorage.Modules.Survivors.SurvivorActions)
 local SurvivorAnimationsController = require(ReplicatedStorage.Modules.Survivors.SurvivorAnimationsController)
-local fastvault = Remotes:WaitForChild("Window"):WaitForChild("fastvault")
+
+local fastvault = nil
+local function getFastvault()
+    if fastvault then return fastvault end
+    local windowRemote = Remotes:FindFirstChild("Window")
+    if windowRemote then
+        fastvault = windowRemote:FindFirstChild("fastvault")
+    end
+    return fastvault
+end
 
 local controller = nil
 local getSprintHooked = false
@@ -714,7 +723,10 @@ local connection = RunService.Heartbeat:Connect(function()
                 lastActionTime = now
                 task.spawn(SurvivorActions.startVault, c, vaultPoint)
                 task.delay(0.1, function()
-                    fastvault:FireServer(LocalPlayer)
+                    local fv = getFastvault()
+                    if fv then
+                        fv:FireServer(LocalPlayer)
+                    end
                 end)
             end
             return
