@@ -58,6 +58,44 @@ local TRIGGER_DISTANCE = 13.2
 
 local autoPalletVaultEnabled = false
 local autoWindowVaultEnabled = false
+local unlimitedVaultEnabled = false
+local antiParryActive = false
+
+-- ============================================================
+-- SHARED: namecall hook infra (buat silent aim / bypass)
+-- ============================================================
+local silentSupported = (getrawmetatable ~= nil) and (getnamecallmethod ~= nil) and (newcclosure ~= nil)
+local namecallHandlers = {}
+local rawCall = nil
+
+local function onNamecall(fn) table.insert(namecallHandlers, fn) end
+local function callOriginal(self, ...) return rawCall(self, ...) end
+
+local function installNamecallHook()
+    if not silentSupported then
+        warn("[Aim/Vault] Silent aim / bypass ga didukung executor ini.")
+        return
+    end
+    local mt = getrawmetatable(game)
+    if setreadonly then pcall(setreadonly, mt, false) end
+    if getgenv and getgenv().__tomaAimOrig then
+        pcall(function() mt.__namecall = getgenv().__tomaAimOrig end)
+    end
+    local oldNamecall = mt.__namecall
+    if getgenv then getgenv().__tomaAimOrig = oldNamecall end
+    rawCall = function(self, ...) return oldNamecall(self, ...) end
+    local hookFn = function(self, ...)
+        if typeof(self) == "Instance" then
+            local method = getnamecallmethod()
+            for _, h in ipairs(namecallHandlers) do
+                local ok, res = h(self, method, ...)
+                if ok then return res end
+            end
+        end
+        return oldNamecall(self, ...)
+    end
+    mt.__namecall = newcclosure and newcclosure(hookFn) or hookFn
+end
 
 -- Optimized Heartbeat for Killer Tracking (Only runs when Combat features are active)
 RunService.Heartbeat:Connect(function()
@@ -738,50 +776,37 @@ print("Auto Climb (Fast Window/Pallet) successfully loaded!")
 
 
 --Unlimited Vault Window
-
 -- Bypasses the window block / spike spawning mechanism after 3 vaults.
 
-local CollectionService = game:GetService("CollectionService")
-local Players = game:GetService("Players")
-
--- 1. Remove the "Blocked" tag from any currently blocked windows locally
-for _, inst in ipairs(CollectionService:GetTagged("Blocked")) do
-    CollectionService:RemoveTag(inst, "Blocked")
-    print("Unblocked window at:", inst:GetFullName())
-end
-
--- 2. Hook __namecall to intercept HasTag, GetTagged, and Character Attributes
-local oldNamecall
-oldNamecall = hookmetamethod(game, "__namecall", function(self, ...)
-    local method = getnamecallmethod()
+-- Register namecall handler
+onNamecall(function(self, method, ...)
+    if not unlimitedVaultEnabled then return false end
     local args = {...}
     
     -- Intercept CollectionService checks for "Blocked" tag
     if method == "HasTag" and args[2] == "Blocked" then
-        return false
+        return true, false
     elseif method == "GetTagged" and args[1] == "Blocked" then
-        return {}
+        return true, {}
     
     -- Intercept Character Attribute set/get for __VaultFireCount to prevent server/client counting
     elseif method == "SetAttribute" and args[1] == "__VaultFireCount" then
-        return oldNamecall(self, args[1], 0)
+        return true, callOriginal(self, args[1], 0)
     elseif method == "GetAttribute" and args[1] == "__VaultFireCount" then
-        return 0
+        return true, 0
     end
     
-    return oldNamecall(self, ...)
+    return false
 end)
 
--- 3. Reset the __VaultFireCount attribute on the current character
-local char = Players.LocalPlayer.Character
-if char then
-    char:SetAttribute("__VaultFireCount", 0)
-end
-
--- 4. Listen for character respawning to reset attribute on new character
+-- Listen for character respawning to reset attribute on new character
 Players.LocalPlayer.CharacterAdded:Connect(function(newChar)
-    task.wait(1)
-    newChar:SetAttribute("__VaultFireCount", 0)
+    if unlimitedVaultEnabled then
+        task.wait(1)
+        pcall(function()
+            newChar:SetAttribute("__VaultFireCount", 0)
+        end)
+    end
 end)
 
 print("Unlimited Window Vault successfully loaded!")
@@ -1326,6 +1351,11 @@ local Logic = {
         SetVeilShowFov = function(value: boolean)
             AIM_CONFIG.veilShowFov = value
         end,
+    },
+    Anti = {
+        SetAntiAutoParry = function(enabled: boolean)
+            antiParryActive = enabled
+        end
     }
 }
 
@@ -1340,41 +1370,7 @@ local RunService        = game:GetService("RunService")
 local UserInputService  = game:GetService("UserInputService")
 local LocalPlayer       = Players.LocalPlayer
 
--- ============================================================
--- SHARED: namecall hook infra (buat silent aim)
--- ============================================================
-local silentSupported = (getrawmetatable ~= nil) and (getnamecallmethod ~= nil) and (newcclosure ~= nil)
-local namecallHandlers = {}
-local rawCall = nil
 
-local function onNamecall(fn) table.insert(namecallHandlers, fn) end
-local function callOriginal(self, ...) return rawCall(self, ...) end
-
-local function installNamecallHook()
-    if not silentSupported then
-        warn("[Aim] Silent aim ga didukung executor ini (butuh getrawmetatable/getnamecallmethod/newcclosure).")
-        return
-    end
-    local mt = getrawmetatable(game)
-    if setreadonly then pcall(setreadonly, mt, false) end
-    if getgenv and getgenv().__tomaAimOrig then
-        pcall(function() mt.__namecall = getgenv().__tomaAimOrig end)
-    end
-    local oldNamecall = mt.__namecall
-    if getgenv then getgenv().__tomaAimOrig = oldNamecall end
-    rawCall = function(self, ...) return oldNamecall(self, ...) end
-    local hookFn = function(self, ...)
-        if typeof(self) == "Instance" then
-            local method = getnamecallmethod()
-            for _, h in ipairs(namecallHandlers) do
-                local ok, res = h(self, method, ...)
-                if ok then return res end
-            end
-        end
-        return oldNamecall(self, ...)
-    end
-    mt.__namecall = newcclosure and newcclosure(hookFn) or hookFn
-end
 
 -- ============================================================
 -- MODULE 1: Twist of Fate (Aim Lock + Silent Aim gun)
@@ -1771,6 +1767,45 @@ initVeil()
 installNamecallHook()
 
 print("[Aim Hub] Pistol & Veil script loaded. Silent aim supported: " .. tostring(silentSupported))
+
+--Anti Auto Parry
+local baitAnim = Instance.new("Animation")
+baitAnim.AnimationId = "rbxassetid://117042998468241"
+
+task.spawn(function()
+    while true do
+        task.wait(0.3)
+        if not antiParryActive then continue end
+        
+        local char = LocalPlayer.Character
+        local myRoot = char and char:FindFirstChild("HumanoidRootPart")
+        local hum = char and char:FindFirstChildOfClass("Humanoid")
+        local animator = hum and hum:FindFirstChildOfClass("Animator")
+        
+        if myRoot and animator then
+            local near = false
+            for _, p in ipairs(Players:GetPlayers()) do
+                if p ~= LocalPlayer and p.Team and p.Team.Name == "Survivors" then
+                    local r = p.Character and p.Character:FindFirstChild("HumanoidRootPart")
+                    if r and (myRoot.Position - r.Position).Magnitude <= 15 then
+                        near = true
+                        break
+                    end
+                end
+            end
+            
+            if near then
+                local ok, track = pcall(function() return animator:LoadAnimation(baitAnim) end)
+                if ok and track then
+                    track:Play()
+                    track:AdjustWeight(0) -- event AnimationPlayed terpancar, killer tetap diam
+                    task.wait(0.05)
+                    track:Stop()
+                end
+            end
+        end
+    end
+end)
 
 getgenv().AutomaHubLogic = Logic
 return Logic
