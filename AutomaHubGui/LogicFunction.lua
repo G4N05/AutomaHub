@@ -659,11 +659,6 @@ SurvivorAnimationsController._isFacingStraightEnough = function(...)
     return oldFacingStraight(...)
 end
 
--- Auto-climb loop configurations
-local lastActionTime = 0
-local lastActionInstance = nil
-local COOLDOWN = 1.5 -- Seconds cooldown before allowing the same window/pallet to be climbed again
-
 -- Helper to check if the caller stack contains target action/animation modules
 local function isCalledFromTarget()
     for i = 2, 12 do
@@ -679,7 +674,7 @@ end
 -- Hook 2: Hook the Velocity property of HumanoidRootPart to trick the animation script into thinking we have speed > 15.25 (triggers fastvault)
 local oldIndex
 oldIndex = hookmetamethod(game, "__index", function(self, key)
-    if (autoPalletVaultEnabled or autoWindowVaultEnabled) and (tick() - lastActionTime < 1.0) and not checkcaller() and key == "Velocity" and self.Name == "HumanoidRootPart" then
+    if (autoPalletVaultEnabled or autoWindowVaultEnabled) and not checkcaller() and key == "Velocity" and self.Name == "HumanoidRootPart" then
         if isCalledFromTarget() then
             return Vector3.new(20, 0, 0) -- High speed to trigger fast vault
         end
@@ -704,6 +699,11 @@ local function tryHookController(c)
         return false
     end
 end
+
+-- Auto-climb loop configurations
+local lastActionTime = 0
+local lastActionInstance = nil
+local COOLDOWN = 1.5 -- Seconds cooldown before allowing the same window/pallet to be climbed again
 
 -- Connect to Heartbeat to continuously scan proximity
 local connection
