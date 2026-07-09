@@ -634,6 +634,8 @@ local localPlayer = Players.LocalPlayer
 -- ponytail: find controller dynamically instead of blocking initialization if not spawned yet
 local controller = nil
 local getSprintHooked = false
+-- ponytail: cheap gate — only true when proximity state has a vault/pallet target nearby
+local isNearVaultTarget = false
 
 local function getController()
     if controller then return controller end
@@ -674,7 +676,8 @@ end
 -- Hook 2: Hook the Velocity property of HumanoidRootPart to trick the animation script into thinking we have speed > 15.25 (triggers fastvault)
 local oldIndex
 oldIndex = hookmetamethod(game, "__index", function(self, key)
-    if (autoPalletVaultEnabled or autoWindowVaultEnabled) and not checkcaller() and key == "Velocity" and self.Name == "HumanoidRootPart" then
+    -- ponytail: check cheap flag first; skip expensive stack walk when not near any target
+    if isNearVaultTarget and (autoPalletVaultEnabled or autoWindowVaultEnabled) and not checkcaller() and key == "Velocity" and self.Name == "HumanoidRootPart" then
         if isCalledFromTarget() then
             return Vector3.new(20, 0, 0) -- High speed to trigger fast vault
         end
@@ -687,7 +690,8 @@ local function tryHookController(c)
     getSprintHooked = true
     local oldGetSprintFlag = c.getSprintFlag
     c.getSprintFlag = function(self)
-        if (autoPalletVaultEnabled or autoWindowVaultEnabled) and isCalledFromTarget() then
+        -- ponytail: skip stack walk entirely when not near a vault target
+        if isNearVaultTarget and (autoPalletVaultEnabled or autoWindowVaultEnabled) and isCalledFromTarget() then
             return true
         end
         if oldGetSprintFlag then
@@ -731,7 +735,10 @@ connection = RunService.Heartbeat:Connect(function()
     end
 
     local state = c.proximity and c.proximity.state
-    if not state then return end
+    if not state then
+        isNearVaultTarget = false
+        return
+    end
 
     local now = tick()
 
@@ -739,6 +746,7 @@ connection = RunService.Heartbeat:Connect(function()
     if autoWindowVaultEnabled then
         local vaultPoint = state.vaultPoint
         if vaultPoint then
+            isNearVaultTarget = true
             if vaultPoint ~= lastActionInstance or (now - lastActionTime) > COOLDOWN then
                 lastActionInstance = vaultPoint
                 lastActionTime = now
@@ -754,6 +762,7 @@ connection = RunService.Heartbeat:Connect(function()
     if autoPalletVaultEnabled then
         local palletSlidePoint = state.palletSlidePoint
         if palletSlidePoint then
+            isNearVaultTarget = true
             if palletSlidePoint ~= lastActionInstance or (now - lastActionTime) > COOLDOWN then
                 lastActionInstance = palletSlidePoint
                 lastActionTime = now
@@ -764,6 +773,9 @@ connection = RunService.Heartbeat:Connect(function()
             return
         end
     end
+
+    -- No target nearby — disable expensive hooks
+    isNearVaultTarget = false
 end)
 
 -- Store the connection in _G so the user can disable/clean it up if they want
