@@ -1269,6 +1269,9 @@ local Logic = {
         end,
         SetAutoWindowVault = function(enabled: boolean)
             autoWindowVaultEnabled = enabled
+        end,
+        SetUnlimitedVault = function(enabled: boolean)
+            unlimitedVaultEnabled = enabled
         end
     },
     ESP = ESP,
