@@ -663,9 +663,9 @@ local SurvivorAnimationsController = require(ReplicatedStorage.Modules.Survivors
 local oldFacingStraight = SurvivorAnimationsController._isFacingStraightEnough
 SurvivorAnimationsController._isFacingStraightEnough = function(...)
     if autoPalletVaultEnabled or autoWindowVaultEnabled then
-        return true
+        return true  -- skip angle check entirely
     end
-    return oldFacingStraight(...)
+    return oldFacingStraight and oldFacingStraight(...)
 end
 
 -- Helper to check if the caller stack contains target action/animation modules
@@ -790,35 +790,50 @@ if _G.AutoClimbConnection then
 end
 _G.AutoClimbConnection = connection
 
+-- Reset cached controller on respawn so findControllerAsync re-searches for the new round
+localPlayer.CharacterAdded:Connect(function()
+    _G.AutoVaultController = nil
+    controller = nil
+    getSprintHooked = false
+    findControllerAsync()
+end)
+
 print("Auto Climb (Fast Window/Pallet) successfully loaded!")
 
 
 --Unlimited Vault Window
 -- Bypasses the window block / spike spawning mechanism after 3 vaults.
 
--- Register namecall handler
-onNamecall(function(self, method, ...)
-    if not unlimitedVaultEnabled then return false end
+-- Hook __namecall (onNamecall does not exist in Madium executor)
+if _G.AutoUnlimitedVaultNC then
+    pcall(function() hookmetamethod(game, "__namecall", _G.AutoUnlimitedVaultNC) end)
+    _G.AutoUnlimitedVaultNC = nil
+end
+local oldNC
+oldNC = hookmetamethod(game, "__namecall", function(self, ...)
+    if not unlimitedVaultEnabled then return oldNC(self, ...) end
+    local method = getnamecallmethod()
     local args = {...}
-    
-    -- Intercept CollectionService checks for "Blocked" tag
-    if method == "HasTag" and args[2] == "Blocked" then
-        return true, false
+
+    -- Intercept CollectionService:HasTag(obj, "Blocked")
+    if method == "HasTag" and args[1] == "Blocked" then
+        return false
+    -- Intercept CollectionService:GetTagged("Blocked")
     elseif method == "GetTagged" and args[1] == "Blocked" then
-        return true, {}
-    
-    -- Intercept Character Attribute set/get for __VaultFireCount to prevent server/client counting
+        return {}
+    -- Intercept character __VaultFireCount attribute writes/reads
     elseif method == "SetAttribute" and args[1] == "__VaultFireCount" then
-        return true, callOriginal(self, args[1], 0)
+        return oldNC(self, args[1], 0)
     elseif method == "GetAttribute" and args[1] == "__VaultFireCount" then
-        return true, 0
+        return 0
     end
-    
-    return false
+
+    return oldNC(self, ...)
 end)
+_G.AutoUnlimitedVaultNC = oldNC  -- store original so we can restore on reinject
 
 -- Listen for character respawning to reset attribute on new character
-Players.LocalPlayer.CharacterAdded:Connect(function(newChar)
+localPlayer.CharacterAdded:Connect(function(newChar)
     if unlimitedVaultEnabled then
         task.wait(1)
         pcall(function()
