@@ -628,16 +628,7 @@ print("Auto Pallet Drop Script updated and optimized!")
 -- ponytail: v2 removed hookmetamethod and stack scan to eliminate lag. Uses server fastvault fire instead.
 local SurvivorActions = require(ReplicatedStorage.Modules.Survivors.SurvivorActions)
 local SurvivorAnimationsController = require(ReplicatedStorage.Modules.Survivors.SurvivorAnimationsController)
-
-local fastvault = nil
-local function getFastvault()
-    if fastvault then return fastvault end
-    local windowRemote = Remotes:FindFirstChild("Window")
-    if windowRemote then
-        fastvault = windowRemote:FindFirstChild("fastvault")
-    end
-    return fastvault
-end
+local fastvault = Remotes:WaitForChild("Window"):WaitForChild("fastvault")
 
 local controller = nil
 local getSprintHooked = false
@@ -694,15 +685,6 @@ local lastActionInstance = nil
 local COOLDOWN = 1.5
 
 local connection = RunService.Heartbeat:Connect(function()
-    if unlimitedVaultEnabled then
-        local char = LocalPlayer.Character
-        if char then
-            if char:GetAttribute("__VaultFireCount") and char:GetAttribute("__VaultFireCount") > 0 then
-                pcall(function() char:SetAttribute("__VaultFireCount", 0) end)
-            end
-        end
-    end
-
     if not (autoPalletVaultEnabled or autoWindowVaultEnabled) then return end
 
     local c = getController()
@@ -732,10 +714,7 @@ local connection = RunService.Heartbeat:Connect(function()
                 lastActionTime = now
                 task.spawn(SurvivorActions.startVault, c, vaultPoint)
                 task.delay(0.1, function()
-                    local fv = getFastvault()
-                    if fv then
-                        fv:FireServer(LocalPlayer)
-                    end
+                    fastvault:FireServer(LocalPlayer)
                 end)
             end
             return
@@ -763,34 +742,39 @@ _G.AutoClimbConnection = connection
 print("Auto Climb (Fast Window/Pallet) successfully loaded!")
 
 
--- Unlimited Window Vault
--- ponytail: v2 clears client-side "Blocked" tag so the scanner always finds windows.
-local function updateUnlimitedVault()
-    warn("[AutomaHub DEBUG] updateUnlimitedVault running, unlimitedVaultEnabled =", unlimitedVaultEnabled)
-    if _G.UnlimitedVaultConn then
-        warn("[AutomaHub DEBUG] Disconnecting old UnlimitedVaultConn connection")
-        pcall(function() _G.UnlimitedVaultConn:Disconnect() end)
-        _G.UnlimitedVaultConn = nil
+--Unlimited Vault Window
+-- Bypasses the window block / spike spawning mechanism after 3 vaults.
+
+-- Register namecall handler
+onNamecall(function(self, method, ...)
+    if not unlimitedVaultEnabled then return false end
+    local args = {...}
+    
+    -- Intercept CollectionService checks for "Blocked" tag
+    if method == "HasTag" and args[2] == "Blocked" then
+        return true, false
+    elseif method == "GetTagged" and args[1] == "Blocked" then
+        return true, {}
+    
+    -- Intercept Character Attribute set/get for __VaultFireCount to prevent server/client counting
+    elseif method == "SetAttribute" and args[1] == "__VaultFireCount" then
+        return true, callOriginal(self, args[1], 0)
+    elseif method == "GetAttribute" and args[1] == "__VaultFireCount" then
+        return true, 0
     end
+    
+    return false
+end)
 
+-- Listen for character respawning to reset attribute on new character
+Players.LocalPlayer.CharacterAdded:Connect(function(newChar)
     if unlimitedVaultEnabled then
-        local blockedItems = CollectionService:GetTagged("Blocked")
-        warn("[AutomaHub DEBUG] Found", #blockedItems, "already-blocked items to clean")
-        for _, v in ipairs(blockedItems) do
-            CollectionService:RemoveTag(v, "Blocked")
-            warn("[AutomaHub DEBUG] Cleared Blocked tag from existing item:", v.Name)
-        end
-
-        _G.UnlimitedVaultConn = CollectionService:GetInstanceAddedSignal("Blocked"):Connect(function(instance)
-            warn("[AutomaHub DEBUG] New Blocked tag detected on:", instance.Name)
-            CollectionService:RemoveTag(instance, "Blocked")
-            warn("[AutomaHub DEBUG] Stripped Blocked tag from new item:", instance.Name)
+        task.wait(1)
+        pcall(function()
+            newChar:SetAttribute("__VaultFireCount", 0)
         end)
     end
-end
-
--- Run once on startup if already enabled
-updateUnlimitedVault()
+end)
 
 print("Unlimited Window Vault successfully loaded!")
 
@@ -1285,11 +1269,6 @@ local Logic = {
         end,
         SetAutoWindowVault = function(enabled: boolean)
             autoWindowVaultEnabled = enabled
-        end,
-        SetUnlimitedVault = function(enabled: boolean)
-            warn("[AutomaHub DEBUG] SetUnlimitedVault callback fired with:", enabled)
-            unlimitedVaultEnabled = enabled
-            updateUnlimitedVault()
         end
     },
     ESP = ESP,

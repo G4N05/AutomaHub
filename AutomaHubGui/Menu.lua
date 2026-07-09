@@ -139,18 +139,6 @@ PalletSection:Slider({
 })
 
 local VaultSection = CombatTab:Section({ Title = "Auto Vault Settings" })
-
-VaultSection:Toggle({
-    Title = "Unlimited Window Vault (Bypass)",
-    Desc = "Bypass the 3-vault block restriction on windows",
-    Value = false,
-    Callback = function(value: boolean)
-        if Combat and Combat.SetUnlimitedVault then
-            Combat.SetUnlimitedVault(value)
-        end
-    end
-})
-
 VaultSection:Toggle({
     Title = "Auto Pallet Vault",
     Desc = "Automatically slide/vault over pallets",
@@ -169,6 +157,17 @@ VaultSection:Toggle({
     Callback = function(value: boolean)
         if Combat and Combat.SetAutoWindowVault then
             Combat.SetAutoWindowVault(value)
+        end
+    end
+})
+
+VaultSection:Toggle({
+    Title = "Unlimited vault Window",
+    Desc = "Bypass the 3-vault block restriction on windows",
+    Value = false,
+    Callback = function(value: boolean)
+        if Combat and Combat.SetUnlimitedVault then
+            Combat.SetUnlimitedVault(value)
         end
     end
 })
