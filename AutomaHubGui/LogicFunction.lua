@@ -56,47 +56,6 @@ local dodgeDistance = 25
 local autoPalletEnabled = false
 local TRIGGER_DISTANCE = 13.2
 
-local autoPalletVaultEnabled = false
-local autoWindowVaultEnabled = false
-local unlimitedVaultEnabled = false
-local antiParryActive = false
-
--- ============================================================
--- SHARED: namecall hook infra (buat silent aim / bypass)
--- ============================================================
-local silentSupported = (getrawmetatable ~= nil) and (getnamecallmethod ~= nil) and (newcclosure ~= nil)
-local namecallHandlers = {}
-local rawCall = nil
-
-local function onNamecall(fn) table.insert(namecallHandlers, fn) end
-local function callOriginal(self, ...) return rawCall(self, ...) end
-
-local function installNamecallHook()
-    if not silentSupported then
-        warn("[Aim/Vault] Silent aim / bypass ga didukung executor ini.")
-        return
-    end
-    local mt = getrawmetatable(game)
-    if setreadonly then pcall(setreadonly, mt, false) end
-    if getgenv and getgenv().__tomaAimOrig then
-        pcall(function() mt.__namecall = getgenv().__tomaAimOrig end)
-    end
-    local oldNamecall = mt.__namecall
-    if getgenv then getgenv().__tomaAimOrig = oldNamecall end
-    rawCall = function(self, ...) return oldNamecall(self, ...) end
-    local hookFn = function(self, ...)
-        if typeof(self) == "Instance" then
-            local method = getnamecallmethod()
-            for _, h in ipairs(namecallHandlers) do
-                local ok, res = h(self, method, ...)
-                if ok then return res end
-            end
-        end
-        return oldNamecall(self, ...)
-    end
-    mt.__namecall = newcclosure and newcclosure(hookFn) or hookFn
-end
-
 -- Optimized Heartbeat for Killer Tracking (Only runs when Combat features are active)
 RunService.Heartbeat:Connect(function()
     if not autoParryEnabled and not autoDodgeEnabled then return end
@@ -625,38 +584,38 @@ _G.AutoPalletConnection = connection
 print("Auto Pallet Drop Script updated and optimized!")
 
 -- Auto Vaulth
+
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local RunService = game:GetService("RunService")
 
 local localPlayer = Players.LocalPlayer
 
--- ponytail: find controller dynamically instead of blocking initialization if not spawned yet
-local controller = nil
-local getSprintHooked = false
-
+-- Function to find the active survivor controller in the garbage collector
 local function getController()
-    if controller then return controller end
     for _, v in ipairs(getgc(true)) do
         if type(v) == "table" and type(rawget(v, "startCooldown")) == "function" and type(rawget(v, "prompts")) == "table" then
-            controller = v
-            break
+            return v
         end
     end
-    return controller
+    return nil
 end
+
+local controller = getController()
+if not controller then
+    warn("Controller not found! Make sure you are spawned in the round.")
+    return
+end
+
+print("Survivor controller found:", controller)
 
 -- Import the necessary game modules
 local SurvivorActions = require(ReplicatedStorage.Modules.Survivors.SurvivorActions)
 local SurvivorAnimationsController = require(ReplicatedStorage.Modules.Survivors.SurvivorAnimationsController)
 
 -- Hook 1: Overwrite _isFacingStraightEnough to always return true (allows vaulting from any angle)
-local oldFacingStraight = SurvivorAnimationsController._isFacingStraightEnough
-SurvivorAnimationsController._isFacingStraightEnough = function(...)
-    if autoPalletVaultEnabled or autoWindowVaultEnabled then
-        return true
-    end
-    return oldFacingStraight(...)
+SurvivorAnimationsController._isFacingStraightEnough = function()
+    return true
 end
 
 -- Helper to check if the caller stack contains target action/animation modules
@@ -674,7 +633,7 @@ end
 -- Hook 2: Hook the Velocity property of HumanoidRootPart to trick the animation script into thinking we have speed > 15.25 (triggers fastvault)
 local oldIndex
 oldIndex = hookmetamethod(game, "__index", function(self, key)
-    if (autoPalletVaultEnabled or autoWindowVaultEnabled) and not checkcaller() and key == "Velocity" and self.Name == "HumanoidRootPart" then
+    if not checkcaller() and key == "Velocity" and self.Name == "HumanoidRootPart" then
         if isCalledFromTarget() then
             return Vector3.new(20, 0, 0) -- High speed to trigger fast vault
         end
@@ -682,22 +641,16 @@ oldIndex = hookmetamethod(game, "__index", function(self, key)
     return oldIndex(self, key)
 end)
 
-local function tryHookController(c)
-    if getSprintHooked or not c then return end
-    getSprintHooked = true
-    local oldGetSprintFlag = c.getSprintFlag
-    c.getSprintFlag = function(self)
-        if (autoPalletVaultEnabled or autoWindowVaultEnabled) and isCalledFromTarget() then
-            return true
-        end
-        if oldGetSprintFlag then
-            return oldGetSprintFlag(self)
-        end
-        if self.character then
-            return self.character:GetAttribute("Sprinting") or false
-        end
-        return false
+-- Hook 3: Hook the controller's getSprintFlag to always return true during vaults/slides
+local oldGetSprintFlag = controller.getSprintFlag
+controller.getSprintFlag = function(self)
+    if isCalledFromTarget() then
+        return true
     end
+    if oldGetSprintFlag then
+        return oldGetSprintFlag(self)
+    end
+    return self.character:GetAttribute("Sprinting") or false
 end
 
 -- Auto-climb loop configurations
@@ -708,12 +661,6 @@ local COOLDOWN = 1.5 -- Seconds cooldown before allowing the same window/pallet 
 -- Connect to Heartbeat to continuously scan proximity
 local connection
 connection = RunService.Heartbeat:Connect(function()
-    if not (autoPalletVaultEnabled or autoWindowVaultEnabled) then return end
-    
-    local c = getController()
-    if not c then return end
-    tryHookController(c)
-
     local char = localPlayer.Character
     if not char then return end
     local hrp = char:FindFirstChild("HumanoidRootPart")
@@ -722,47 +669,39 @@ connection = RunService.Heartbeat:Connect(function()
 
     -- Don't trigger if already doing an action, vaulting, sliding, or dropping a pallet
     if hrp:HasTag("doing action") then return end
-    
-    local scriptAttr = c.script
-    if scriptAttr then
-        if scriptAttr:GetAttribute("isVaulting") or scriptAttr:GetAttribute("isSliding") or scriptAttr:GetAttribute("isDroppingPallet") then
-            return
-        end
+    if controller.script:GetAttribute("isVaulting") or controller.script:GetAttribute("isSliding") or controller.script:GetAttribute("isDroppingPallet") then
+        return
     end
 
-    local state = c.proximity and c.proximity.state
+    local state = controller.proximity and controller.proximity.state
     if not state then return end
 
     local now = tick()
 
     -- 1. Check for nearby window to vault
-    if autoWindowVaultEnabled then
-        local vaultPoint = state.vaultPoint
-        if vaultPoint then
-            if vaultPoint ~= lastActionInstance or (now - lastActionTime) > COOLDOWN then
-                lastActionInstance = vaultPoint
-                lastActionTime = now
-                task.spawn(function()
-                    SurvivorActions.startVault(c, vaultPoint)
-                end)
-            end
-            return
+    local vaultPoint = state.vaultPoint
+    if vaultPoint then
+        if vaultPoint ~= lastActionInstance or (now - lastActionTime) > COOLDOWN then
+            lastActionInstance = vaultPoint
+            lastActionTime = now
+            task.spawn(function()
+                SurvivorActions.startVault(controller, vaultPoint)
+            end)
         end
+        return
     end
 
     -- 2. Check for nearby pallet to slide over
-    if autoPalletVaultEnabled then
-        local palletSlidePoint = state.palletSlidePoint
-        if palletSlidePoint then
-            if palletSlidePoint ~= lastActionInstance or (now - lastActionTime) > COOLDOWN then
-                lastActionInstance = palletSlidePoint
-                lastActionTime = now
-                task.spawn(function()
-                    SurvivorActions.startPalletSlide(c, palletSlidePoint)
-                end)
-            end
-            return
+    local palletSlidePoint = state.palletSlidePoint
+    if palletSlidePoint then
+        if palletSlidePoint ~= lastActionInstance or (now - lastActionTime) > COOLDOWN then
+            lastActionInstance = palletSlidePoint
+            lastActionTime = now
+            task.spawn(function()
+                SurvivorActions.startPalletSlide(controller, palletSlidePoint)
+            end)
         end
+        return
     end
 end)
 
@@ -773,43 +712,6 @@ end
 _G.AutoClimbConnection = connection
 
 print("Auto Climb (Fast Window/Pallet) successfully loaded!")
-
-
---Unlimited Vault Window
--- Bypasses the window block / spike spawning mechanism after 3 vaults.
-
--- Register namecall handler
-onNamecall(function(self, method, ...)
-    if not unlimitedVaultEnabled then return false end
-    local args = {...}
-    
-    -- Intercept CollectionService checks for "Blocked" tag
-    if method == "HasTag" and args[2] == "Blocked" then
-        return true, false
-    elseif method == "GetTagged" and args[1] == "Blocked" then
-        return true, {}
-    
-    -- Intercept Character Attribute set/get for __VaultFireCount to prevent server/client counting
-    elseif method == "SetAttribute" and args[1] == "__VaultFireCount" then
-        return true, callOriginal(self, args[1], 0)
-    elseif method == "GetAttribute" and args[1] == "__VaultFireCount" then
-        return true, 0
-    end
-    
-    return false
-end)
-
--- Listen for character respawning to reset attribute on new character
-Players.LocalPlayer.CharacterAdded:Connect(function(newChar)
-    if unlimitedVaultEnabled then
-        task.wait(1)
-        pcall(function()
-            newChar:SetAttribute("__VaultFireCount", 0)
-        end)
-    end
-end)
-
-print("Unlimited Window Vault successfully loaded!")
 
 -- VISUAL (ESP) MODULE
 
@@ -1296,12 +1198,6 @@ local Logic = {
         end,
         SetPalletDistance = function(dist: number)
             TRIGGER_DISTANCE = dist
-        end,
-        SetAutoPalletVault = function(enabled: boolean)
-            autoPalletVaultEnabled = enabled
-        end,
-        SetAutoWindowVault = function(enabled: boolean)
-            autoWindowVaultEnabled = enabled
         end
     },
     ESP = ESP,
@@ -1351,11 +1247,6 @@ local Logic = {
         SetVeilShowFov = function(value: boolean)
             AIM_CONFIG.veilShowFov = value
         end,
-    },
-    Anti = {
-        SetAntiAutoParry = function(enabled: boolean)
-            antiParryActive = enabled
-        end
     }
 }
 
@@ -1370,7 +1261,41 @@ local RunService        = game:GetService("RunService")
 local UserInputService  = game:GetService("UserInputService")
 local LocalPlayer       = Players.LocalPlayer
 
+-- ============================================================
+-- SHARED: namecall hook infra (buat silent aim)
+-- ============================================================
+local silentSupported = (getrawmetatable ~= nil) and (getnamecallmethod ~= nil) and (newcclosure ~= nil)
+local namecallHandlers = {}
+local rawCall = nil
 
+local function onNamecall(fn) table.insert(namecallHandlers, fn) end
+local function callOriginal(self, ...) return rawCall(self, ...) end
+
+local function installNamecallHook()
+    if not silentSupported then
+        warn("[Aim] Silent aim ga didukung executor ini (butuh getrawmetatable/getnamecallmethod/newcclosure).")
+        return
+    end
+    local mt = getrawmetatable(game)
+    if setreadonly then pcall(setreadonly, mt, false) end
+    if getgenv and getgenv().__tomaAimOrig then
+        pcall(function() mt.__namecall = getgenv().__tomaAimOrig end)
+    end
+    local oldNamecall = mt.__namecall
+    if getgenv then getgenv().__tomaAimOrig = oldNamecall end
+    rawCall = function(self, ...) return oldNamecall(self, ...) end
+    local hookFn = function(self, ...)
+        if typeof(self) == "Instance" then
+            local method = getnamecallmethod()
+            for _, h in ipairs(namecallHandlers) do
+                local ok, res = h(self, method, ...)
+                if ok then return res end
+            end
+        end
+        return oldNamecall(self, ...)
+    end
+    mt.__namecall = newcclosure and newcclosure(hookFn) or hookFn
+end
 
 -- ============================================================
 -- MODULE 1: Twist of Fate (Aim Lock + Silent Aim gun)
@@ -1767,45 +1692,6 @@ initVeil()
 installNamecallHook()
 
 print("[Aim Hub] Pistol & Veil script loaded. Silent aim supported: " .. tostring(silentSupported))
-
---Anti Auto Parry
-local baitAnim = Instance.new("Animation")
-baitAnim.AnimationId = "rbxassetid://117042998468241"
-
-task.spawn(function()
-    while true do
-        task.wait(0.3)
-        if not antiParryActive then continue end
-        
-        local char = LocalPlayer.Character
-        local myRoot = char and char:FindFirstChild("HumanoidRootPart")
-        local hum = char and char:FindFirstChildOfClass("Humanoid")
-        local animator = hum and hum:FindFirstChildOfClass("Animator")
-        
-        if myRoot and animator then
-            local near = false
-            for _, p in ipairs(Players:GetPlayers()) do
-                if p ~= LocalPlayer and p.Team and p.Team.Name == "Survivors" then
-                    local r = p.Character and p.Character:FindFirstChild("HumanoidRootPart")
-                    if r and (myRoot.Position - r.Position).Magnitude <= 15 then
-                        near = true
-                        break
-                    end
-                end
-            end
-            
-            if near then
-                local ok, track = pcall(function() return animator:LoadAnimation(baitAnim) end)
-                if ok and track then
-                    track:Play()
-                    track:AdjustWeight(0) -- event AnimationPlayed terpancar, killer tetap diam
-                    task.wait(0.05)
-                    track:Stop()
-                end
-            end
-        end
-    end
-end)
 
 getgenv().AutomaHubLogic = Logic
 return Logic
