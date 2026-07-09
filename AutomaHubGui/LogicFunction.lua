@@ -1447,12 +1447,16 @@ local function initVeil()
             end
         end
 
-        local holding = false
+        local stanceChar = LocalPlayer.Character
+        local inThrowStance = stanceChar and stanceChar:GetAttribute("spearmode") == true
+
+        local inputHolding = false
         if UserInputService.TouchEnabled then
-            holding = mobileAttackHeld
+            inputHolding = mobileAttackHeld
         else
-            holding = UserInputService:IsMouseButtonPressed(Enum.UserInputType.MouseButton1)
+            inputHolding = UserInputService:IsMouseButtonPressed(Enum.UserInputType.MouseButton1)
         end
+        local holding = inThrowStance and inputHolding
         local target
         if holding then
             if not veilLockedPlayer then veilLockedPlayer = veilGetTarget() end
