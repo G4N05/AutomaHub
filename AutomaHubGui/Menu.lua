@@ -12,10 +12,7 @@ local Logic = (function()
     local logicScript = typeof(script) == "Instance" and script.Parent and script.Parent:FindFirstChild("LogicFunction")
     if logicScript and logicScript:IsA("ModuleScript") then
         local success, module = pcall(require, logicScript)
-        if success then 
-            print("[AutomaHub Menu] Loaded LogicFunction from ModuleScript")
-            return module 
-        end
+        if success then return module end
     end
     
     local paths = { "AutomaHub/AutomaHubGui/LogicFunction.lua", "AutomaHubGui/LogicFunction.lua" }
@@ -25,10 +22,7 @@ local Logic = (function()
             local loader, err = loadstring(fileContent)
             if loader then
                 local success, module = pcall(loader)
-                if success and module then 
-                    print("[AutomaHub Menu] Loaded LogicFunction from local path: " .. path)
-                    return module 
-                end
+                if success and module then return module end
             end
         end
     end
@@ -38,10 +32,7 @@ local Logic = (function()
         local loader, err = loadstring(remoteContent)
         if loader then
             local success, module = pcall(loader)
-            if success and module then 
-                print("[AutomaHub Menu] Loaded LogicFunction from GitHub Raw")
-                return module 
-            end
+            if success and module then return module end
         end
     end
     
@@ -50,14 +41,10 @@ local Logic = (function()
         local loader, err = loadstring(cdnContent)
         if loader then
             local success, module = pcall(loader)
-            if success and module then 
-                print("[AutomaHub Menu] Loaded LogicFunction from jsDelivr CDN")
-                return module 
-            end
+            if success and module then return module end
         end
     end
     
-    print("[AutomaHub Menu] Loaded LogicFunction from global backup (AutomaHubLogic)")
     return getgenv().AutomaHubLogic
 end)()
 

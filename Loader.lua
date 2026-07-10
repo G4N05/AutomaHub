@@ -6,21 +6,17 @@ getgenv().AutomaHubLoaderModule = true
 
 local function fetchScript(path: string): any
     local content
-    local source = "unknown"
     if _G.AutomaHubDeveloperMode and isfile then
         if isfile(path) then
-            local ok = pcall(function() content = readfile(path) end)
-            if ok and content then source = "Local Workspace (" .. path .. ")" end
+            pcall(function() content = readfile(path) end)
         elseif isfile("AutomaHub/" .. path) then
-            local ok = pcall(function() content = readfile("AutomaHub/" .. path) end)
-            if ok and content then source = "Local Workspace (AutomaHub/" .. path .. ")" end
+            pcall(function() content = readfile("AutomaHub/" .. path) end)
         end
     end
     if not content then
         local ok, res = pcall(game.HttpGet, game, baseUrl .. path .. "?t=" .. tostring(tick()))
         if ok and res and not res:find("Too Many Requests") and not res:find("429") then
             content = res
-            source = "GitHub Raw"
         end
     end
     if not content then
@@ -28,13 +24,11 @@ local function fetchScript(path: string): any
         local ok, res = pcall(game.HttpGet, game, cdnUrl .. path .. "?t=" .. tostring(tick()))
         if ok and res then
             content = res
-            source = "jsDelivr CDN"
         end
     end
     if not content then
         error("Failed to fetch script: " .. path .. " (local, GitHub, and CDN all failed)")
     end
-    print("[AutomaHub Loader] Loaded " .. path .. " from: " .. source)
     local func, err = loadstring(content)
     if not func then
         error("Failed to compile script " .. path .. ": " .. tostring(err) .. "\nContent: " .. string.sub(content, 1, 100))

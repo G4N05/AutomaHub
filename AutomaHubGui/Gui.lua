@@ -1,20 +1,5 @@
 --!strict
 
--- Clean up any existing WindUI ScreenGuis from previous runs to prevent conflicts on re-execution
-pcall(function()
-    local cg = (gethui and gethui()) or game:GetService("CoreGui")
-    local hiddenUi = cg:FindFirstChild("HiddenUI")
-    local targets = { "WindUI", "WindUI/Notifications", "WindUI/Dropdowns", "WindUI/Tooltips" }
-    for _, name in ipairs(targets) do
-        local old = cg:FindFirstChild(name)
-        if old then pcall(function() old:Destroy() end) end
-        if hiddenUi then
-            local oldHidden = hiddenUi:FindFirstChild(name)
-            if oldHidden then pcall(function() oldHidden:Destroy() end) end
-        end
-    end
-end)
-
 local WindUI = loadstring(game:HttpGet("https://raw.githubusercontent.com/Footagesus/WindUI/main/dist/main.lua"))() :: any
 getgenv().WindUI = WindUI
 
