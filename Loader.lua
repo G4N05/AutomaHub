@@ -6,29 +6,37 @@ getgenv().AutomaHubLoaderModule = true
 
 local function fetchScript(path: string): any
     local content
+    local source = "unknown"
     if isfile then
         if isfile(path) then
-            pcall(function() content = readfile(path) end)
+            pcall(function() content = readfile(path) source = "local" end)
         elseif isfile("AutomaHub/" .. path) then
-            pcall(function() content = readfile("AutomaHub/" .. path) end)
+            pcall(function() content = readfile("AutomaHub/" .. path) source = "local (AutomaHub)" end)
         end
     end
     if not content then
         local ok, res = pcall(game.HttpGet, game, baseUrl .. path .. "?t=" .. tostring(tick()))
         if ok and res and not res:find("Too Many Requests") and not res:find("429") then
             content = res
+            source = "GitHub"
+        else
+            warn("[AutomaHub] GitHub fetch failed for " .. path .. ": " .. tostring(res))
         end
     end
     if not content then
-        local cdnUrl = "https://cdn.jsdelivr.net/gh/G4N05/AutomaHub@main/"
-        local ok, res = pcall(game.HttpGet, game, cdnUrl .. path .. "?t=" .. tostring(tick()))
-        if ok and res then
+        local devCdn = "https://raw.githack.com/G4N05/AutomaHub/main/"
+        local ok, res = pcall(game.HttpGet, game, devCdn .. path)
+        if ok and res and not res:find("404") then
             content = res
+            source = "GitHack (No-Cache)"
+        else
+            warn("[AutomaHub] GitHack fetch failed for " .. path .. ": " .. tostring(res))
         end
     end
     if not content then
         error("Failed to fetch script: " .. path .. " (local, GitHub, and CDN all failed)")
     end
+    print("[AutomaHub] Loaded " .. path .. " from " .. source)
     local func, err = loadstring(content)
     if not func then
         error("Failed to compile script " .. path .. ": " .. tostring(err) .. "\nContent: " .. string.sub(content, 1, 100))
