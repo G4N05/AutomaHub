@@ -746,8 +746,102 @@ task.spawn(function()
 end)
 
 
---vault
+-- =====================================================================
+-- VAULT MODULE (Fast Vault + Auto Vault)
+-- =====================================================================
+local fastVaultEnabled = false
+local autoVaultEnabled = false
 
+do
+    -- ponytail: match-lifecycle optimized fast & auto vault (0% lag)
+    local Survivors = ReplicatedStorage:WaitForChild("Modules"):WaitForChild("Survivors")
+
+    local AnimController = require(Survivors:WaitForChild("SurvivorAnimationsController"))
+    local Actions = require(Survivors:WaitForChild("SurvivorActions"))
+
+    -- 1. Hook Always Fast Vault (hanya sekali setup, guard by flag)
+    AnimController._isFacingStraightEnough = function()
+        if not fastVaultEnabled then return AnimController._isFacingStraightEnough end
+        return true, 0
+    end
+
+    local oldOnVault = AnimController._onVaultAnimation
+    AnimController._onVaultAnimation = function(self, vaultPoint, isSprinting)
+        if not fastVaultEnabled then return oldOnVault(self, vaultPoint, isSprinting) end
+        local hrp = self.humanoidRootPart or (self.character and self.character:FindFirstChild("HumanoidRootPart"))
+        if hrp then
+            local oldV = hrp.Velocity
+            hrp.Velocity = Vector3.new(16, 0, 0)
+            oldOnVault(self, vaultPoint, true)
+            hrp.Velocity = oldV
+        else
+            oldOnVault(self, vaultPoint, true)
+        end
+    end
+
+    local oldStartVault = Actions.startVault
+    Actions.startVault = function(p49, p50)
+        if not fastVaultEnabled then return oldStartVault(p49, p50) end
+        local char = p49.character
+        local oldSprint = char and char:GetAttribute("Sprinting")
+        if char then char:SetAttribute("Sprinting", true) end
+        local oldFlag = p49.getSprintFlag
+        p49.getSprintFlag = function() return true end
+        local ok, err = pcall(oldStartVault, p49, p50)
+        p49.getSprintFlag = oldFlag
+        if char then char:SetAttribute("Sprinting", oldSprint) end
+        if not ok then error(err) end
+    end
+
+    -- 2. Caching State (hanya sekali saat spawn)
+    _G.ActiveStateCached = nil
+
+    local function cacheState()
+        _G.ActiveStateCached = nil
+        task.wait(3)
+        for _, v in ipairs(getgc(true)) do
+            if type(v) == "table" then
+                local ok1, prox    = pcall(function() return v.proximity end)
+                local ok2, cooldown = pcall(function() return v.startCooldown end)
+                local ok3, char    = pcall(function() return v.character end)
+                if ok1 and type(prox) == "table" and ok2 and type(cooldown) == "table" and ok3 and type(char) == "table" then
+                    _G.ActiveStateCached = v
+                    break
+                end
+            end
+        end
+    end
+
+    if _G.AutoVaultCharConn then _G.AutoVaultCharConn:Disconnect() end
+    _G.AutoVaultCharConn = LocalPlayer.CharacterAdded:Connect(function()
+        task.spawn(cacheState)
+    end)
+    task.spawn(cacheState)
+
+    -- 3. Auto Vault Heartbeat (tanpa getgc setiap frame)
+    if _G.AutoVaultConnection then
+        _G.AutoVaultConnection:Disconnect()
+        _G.AutoVaultConnection = nil
+    end
+
+    local lastVaultTime = 0
+    local vaultCooldown = 0.3
+
+    _G.AutoVaultConnection = RunService.Heartbeat:Connect(function()
+        if not autoVaultEnabled then return end
+        local state = _G.ActiveStateCached
+        if not state or not state.proximity then return end
+        local proxState = state.proximity.state
+        local vaultPoint = proxState and proxState.vaultPoint
+        local char = LocalPlayer.Character
+        local scr = char and char:FindFirstChild("CheckInterractable")
+        local isVaulting = scr and scr:GetAttribute("isVaulting") or false
+        if isVaulting then lastVaultTime = os.clock() end
+        if vaultPoint and not isVaulting and (os.clock() - lastVaultTime > vaultCooldown) then
+            Actions.startVault(state, vaultPoint)
+        end
+    end)
+end
 
 
 -- =====================================================================
@@ -1240,6 +1334,12 @@ local Logic = {
         end,
         SetAntiAutoParry = function(enabled: boolean)
             antiAutoParryEnabled = enabled
+        end,
+        SetFastVault = function(enabled: boolean)
+            fastVaultEnabled = enabled
+        end,
+        SetAutoVault = function(enabled: boolean)
+            autoVaultEnabled = enabled
         end
     },
     ESP = ESP,

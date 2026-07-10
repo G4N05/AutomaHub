@@ -148,6 +148,29 @@ SkillcheckSection:Toggle({
     end
 })
 
+local VaultSection = CombatTab:Section({ Title = "Vault Settings" })
+VaultSection:Toggle({
+    Title = "Fast Vault",
+    Desc = "Always vault at sprint speed regardless of sprinting state",
+    Value = false,
+    Callback = function(value: boolean)
+        if Combat and Combat.SetFastVault then
+            Combat.SetFastVault(value)
+        end
+    end
+})
+
+VaultSection:Toggle({
+    Title = "Auto Vault",
+    Desc = "Automatically vault when near a vault point",
+    Value = false,
+    Callback = function(value: boolean)
+        if Combat and Combat.SetAutoVault then
+            Combat.SetAutoVault(value)
+        end
+    end
+})
+
 -- Visual Tab (ESP Settings)
 local ESPSection = VisualTab:Section({ Title = "ESP Settings" })
 ESPSection:Toggle({
