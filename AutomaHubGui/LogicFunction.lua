@@ -486,22 +486,9 @@ local CollectionService = game:GetService("CollectionService")
 local UIS = game:GetService("UserInputService")
 
 local LocalPlayer = Players.LocalPlayer
-local PalletDropEvent = ReplicatedStorage:WaitForChild("Remotes"):WaitForChild("Pallet"):WaitForChild("PalletDropEvent")
 
 local PLAYER_INTERACT_DISTANCE = 6 
 local droppedDebounce = {}
-
-local keybindConnection
-keybindConnection = UIS.InputBegan:Connect(function(input, gpe)
-    if gpe then return end
-    if input.KeyCode == Enum.KeyCode.J then
-        TRIGGER_DISTANCE = math.round((TRIGGER_DISTANCE + 0.1) * 10) / 10
-        print("AutoPallet Jarak Trigger Bertambah:", TRIGGER_DISTANCE)
-    elseif input.KeyCode == Enum.KeyCode.K then
-        TRIGGER_DISTANCE = math.max(0.1, math.round((TRIGGER_DISTANCE - 0.1) * 10) / 10)
-        print("AutoPallet Jarak Trigger Berkurang:", TRIGGER_DISTANCE)
-    end
-end)
 
 local killerPlayer = nil
 local function getKillerCharacter()
@@ -565,7 +552,7 @@ connection = RunService.Heartbeat:Connect(function()
                 local distToKiller = (palletPoint.Position - killerHrp.Position).Magnitude
                 if distToKiller <= TRIGGER_DISTANCE then
                     droppedDebounce[palletPoint] = true
-                    PalletDropEvent:FireServer(palletPoint)
+                    task.spawn(simulateInput)
                     task.delay(5, function()
                         droppedDebounce[palletPoint] = nil
                     end)
@@ -580,10 +567,10 @@ if _G.AutoPalletConnection then
 end
 if _G.AutoPalletKeybindConnection then
     _G.AutoPalletKeybindConnection:Disconnect()
+    _G.AutoPalletKeybindConnection = nil
 end
 
 _G.AutoPalletConnection = connection
-_G.AutoPalletKeybindConnection = keybindConnection
 print("Auto Pallet Drop Script updated and optimized!")
 
 -- =====================================================================
