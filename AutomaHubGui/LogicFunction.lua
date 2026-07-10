@@ -593,6 +593,36 @@ function loadAntiParryTrack(char)
     end
     local animator = hum:WaitForChild("Animator", 5)
     
+    -- Dynamically find the correct attack animation ID for this killer from ReplicatedStorage
+    local animId = "117042998468241" -- Default fallback (Slasher attack)
+    local ReplicatedStorage = game:GetService("ReplicatedStorage")
+    local Killers = ReplicatedStorage:FindFirstChild("Killers")
+    if Killers then
+        local killerFolder = Killers:FindFirstChild(char.Name)
+        if killerFolder then
+            local foundAnim = nil
+            local function search(inst)
+                if inst:IsA("Animation") then
+                    local id = inst.AnimationId:match("%d+")
+                    if id and ATTACK_ANIM_IDS[id] then
+                        foundAnim = inst
+                        return true
+                    end
+                end
+                for _, child in ipairs(inst:GetChildren()) do
+                    if search(child) then return true end
+                end
+                return false
+            end
+            search(killerFolder)
+            if foundAnim then
+                animId = foundAnim.AnimationId:match("%d+")
+            end
+        end
+    end
+    
+    antiParryAnimation.AnimationId = "rbxassetid://" .. animId
+    
     local success, track
     if animator then
         success, track = pcall(function() return animator:LoadAnimation(antiParryAnimation) end)
@@ -603,7 +633,7 @@ function loadAntiParryTrack(char)
     
     if success and track then
         antiParryTrack = track
-        print("[AutomaHub AntiAutoParry] Animation loaded successfully!")
+        print("[AutomaHub AntiAutoParry] Animation loaded successfully for killer: " .. char.Name .. " (ID: " .. animId .. ")")
     else
         warn("[AutomaHub AntiAutoParry] Failed to load animation: " .. tostring(track))
     end
