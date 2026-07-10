@@ -62,8 +62,6 @@ local antiAutoParryEnabled = false
 local loadAntiParryTrack
 local fastVaultEnabled = false
 local vaultMode = "Normal"
-local autoVaultEnabled = false
-
 
 
 -- Optimized Heartbeat for Killer Tracking (Only runs when Combat features are active)
@@ -814,65 +812,6 @@ Actions.startVault = function(p49, p50)
 end
 
 --Auto Vault
--- ponytail: optimized auto-vault loop using single-scan state caching
-local Players = game:GetService("Players")
-local LocalPlayer = Players.LocalPlayer
-local RunService = game:GetService("RunService")
-local ReplicatedStorage = game:GetService("ReplicatedStorage")
-local Actions = require(ReplicatedStorage.Modules.Survivors.SurvivorActions)
-
-_G.ActiveStateCached = nil
-
-local function cacheState()
-    _G.ActiveStateCached = nil
-    task.wait(3)
-    for _, v in ipairs(getgc(true)) do
-        if type(v) == "table" then
-            local ok1, prox = pcall(function() return v.proximity end)
-            local ok2, cooldown = pcall(function() return v.startCooldown end)
-            local ok3, char = pcall(function() return v.character end)
-            if ok1 and type(prox) == "table" and ok2 and type(cooldown) == "table" and ok3 and type(char) == "table" then
-                _G.ActiveStateCached = v
-                break
-            end
-        end
-    end
-end
-
-if _G.AutoVaultCharConn then _G.AutoVaultCharConn:Disconnect() end
-_G.AutoVaultCharConn = LocalPlayer.CharacterAdded:Connect(function()
-    task.spawn(cacheState)
-end)
-
-task.spawn(cacheState)
-
-if _G.AutoVaultConnection then
-    _G.AutoVaultConnection:Disconnect()
-    _G.AutoVaultConnection = nil
-end
-
-local lastVaultTime = 0
-local vaultCooldown = 0.3
-
-_G.AutoVaultConnection = RunService.Heartbeat:Connect(function()
-    if not autoVaultEnabled then return end
-    local state = _G.ActiveStateCached
-    if state and state.proximity then
-        local proxState = state.proximity.state
-        local vaultPoint = proxState and proxState.vaultPoint
-        local char = LocalPlayer.Character
-        local scr = char and char:FindFirstChild("CheckInterractable")
-        local isVaulting = scr and scr:GetAttribute("isVaulting") or false
-        
-        if isVaulting then
-            lastVaultTime = os.clock()
-        end
-        
-        if vaultPoint and not isVaulting and (os.clock() - lastVaultTime > vaultCooldown) then
-            Actions.startVault(state, vaultPoint)
-        end
-    end
-end)
 
 
 
@@ -1372,9 +1311,6 @@ local Logic = {
         end,
         SetVaultMode = function(mode: string)
             vaultMode = mode
-        end,
-        SetAutoVault = function(enabled: boolean)
-            autoVaultEnabled = enabled
         end
     },
     ESP = ESP,
