@@ -482,6 +482,9 @@ local function simulateInput()
     end
 end
 
+-- ponytail: track lastHitRotation to detect when a new skillcheck is presented within the same open GUI (e.g. King Scourge)
+local lastHitRotation = -1
+
 RunService.Heartbeat:Connect(function()
     if not autoSkillcheckEnabled then return end
 
@@ -489,16 +492,16 @@ RunService.Heartbeat:Connect(function()
     local gui = PlayerGui and PlayerGui:FindFirstChild("SkillCheckPromptGui")
     if not gui then 
         scTriggered = false
+        lastHitRotation = -1
         return 
     end
 
     local check = gui:FindFirstChild("Check")
     if not check or not check.Visible then
         scTriggered = false
+        lastHitRotation = -1
         return
     end
-
-    if scTriggered then return end
 
     local line = check:FindFirstChild("Line")
     local goal = check:FindFirstChild("Goal")
@@ -506,11 +509,20 @@ RunService.Heartbeat:Connect(function()
 
     local rotation = line.Rotation
     local goalRotation = goal.Rotation
+    
+    -- If the goal has changed significantly (new stage) or needle reset, reset trigger
+    if scTriggered and math.abs(goalRotation - lastHitRotation) > 1 then
+        scTriggered = false
+    end
+
+    if scTriggered then return end
+
     local perfectZone = CONFIG_SC.zoneCenter + goalRotation
     local maxZone = CONFIG_SC.zoneMax + goalRotation
 
     if rotation >= perfectZone and rotation <= maxZone then
         scTriggered = true
+        lastHitRotation = goalRotation
         task.spawn(simulateInput)
     end
 end)
