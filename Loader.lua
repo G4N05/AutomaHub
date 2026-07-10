@@ -20,9 +20,9 @@ local function fetchScript(path: string): any
         end
     end
     if not content then
-        local cdnUrl = "https://raw.githack.com/G4N05/AutomaHub/main/"
+        local cdnUrl = "https://cdn.jsdelivr.net/gh/G4N05/AutomaHub@main/"
         local ok, res = pcall(game.HttpGet, game, cdnUrl .. path .. "?t=" .. tostring(tick()))
-        if ok and res and not res:find("404") then
+        if ok and res then
             content = res
         end
     end
