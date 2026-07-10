@@ -53,7 +53,7 @@ local autoDodgeEnabled = false
 local dodgeDistance = 25
 
 local autoPalletEnabled = false
-local TRIGGER_DISTANCE = 13.2
+local TRIGGER_DISTANCE = 10.5
 
 -- Optimized Heartbeat for Killer Tracking (Only runs when Combat features are active)
 RunService.Heartbeat:Connect(function()

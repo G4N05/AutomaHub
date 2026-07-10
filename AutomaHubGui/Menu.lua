@@ -127,11 +127,10 @@ PalletSection:Toggle({
 
 PalletSection:Slider({
     Title = "Trigger Distance",
-    Value = { Min = 5.0, Max = 25.0, Default = 10.5 },
+    Value = { Min = 5.0, Max = 25.0, Default = 10.5, Step = 0.1 },
     Callback = function(value: number)
-        local stepped = math.round(value * 10) / 10
         if Combat and Combat.SetPalletDistance then
-            Combat.SetPalletDistance(stepped)
+            Combat.SetPalletDistance(value)
         end
     end
 })
