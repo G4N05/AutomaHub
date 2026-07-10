@@ -51,6 +51,7 @@ end)
 local autoParryEnabled = false
 local parryDistance = 9
 local dashDistance = 30
+local lungeDistance = 13
 
 local autoDodgeEnabled = false
 local dodgeDistance = 25
@@ -228,7 +229,28 @@ local function attemptParry(maxRange: number)
 end
 
 local function triggerParry()
-    attemptParry(parryDistance)
+    -- ponytail: if already within close range, parry immediately
+    if killerDistance <= parryDistance then
+        attemptParry(parryDistance)
+        return
+    end
+    
+    -- ponytail: if in lunge range, poll until they enter parry range
+    if killerDistance <= lungeDistance then
+        task.spawn(function()
+            local startTime = os.clock()
+            while os.clock() - startTime < 0.35 do
+                if not autoParryEnabled or not canParry() then break end
+                if killerDistance <= parryDistance then
+                    if (os.clock() - lastPrePress) >= rearmCooldown and hasLineOfSight() and isKillerFacing() and canParry() then
+                        doParryPress()
+                    end
+                    break
+                end
+                task.wait()
+            end
+        end)
+    end
 end
 
 DamagevizEvent.OnClientEvent:Connect(triggerParry)
