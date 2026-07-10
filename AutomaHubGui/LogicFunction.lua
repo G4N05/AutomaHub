@@ -60,9 +60,6 @@ local TRIGGER_DISTANCE = 13.2
 
 local antiAutoParryEnabled = false
 local loadAntiParryTrack
-local fastVaultEnabled = false
-local vaultMode = "Normal"
-
 
 -- Optimized Heartbeat for Killer Tracking (Only runs when Combat features are active)
 RunService.Heartbeat:Connect(function()
@@ -749,69 +746,7 @@ task.spawn(function()
 end)
 
 
--- =====================================================================
--- VAULT (AUTO VAULT / FAST VAULT)
--- =====================================================================
-
---fast Vault
-
-local ReplicatedStorage = game:GetService("ReplicatedStorage")
-local Survivors = ReplicatedStorage:WaitForChild("Modules"):WaitForChild("Survivors")
-
-local AnimController = require(Survivors:WaitForChild("SurvivorAnimationsController"))
-local Actions = require(Survivors:WaitForChild("SurvivorActions"))
-
-local oldFacing = AnimController._isFacingStraightEnough
-AnimController._isFacingStraightEnough = function(self, ...)
-    if fastVaultEnabled then
-        return true, 0
-    end
-    if oldFacing then
-        return oldFacing(self, ...)
-    end
-end
-
-local oldOnVault = AnimController._onVaultAnimation
-AnimController._onVaultAnimation = function(self, vaultPoint, isSprinting)
-    if fastVaultEnabled then
-        local hrp = self.humanoidRootPart or (self.character and self.character:FindFirstChild("HumanoidRootPart"))
-        if hrp then
-            local oldV = hrp.Velocity
-            local speed = 16
-            if vaultMode == "Velocity" then
-                speed = 24
-            elseif vaultMode == "Instant" then
-                speed = 100
-            end
-            hrp.Velocity = Vector3.new(speed, 0, 0)
-            oldOnVault(self, vaultPoint, true)
-            hrp.Velocity = oldV
-        else
-            oldOnVault(self, vaultPoint, true)
-        end
-    else
-        return oldOnVault(self, vaultPoint, isSprinting)
-    end
-end
-
-local oldStartVault = Actions.startVault
-Actions.startVault = function(p49, p50)
-    if fastVaultEnabled then
-        local char = p49.character
-        local oldSprint = char and char:GetAttribute("Sprinting")
-        if char then char:SetAttribute("Sprinting", true) end
-        local oldFlag = p49.getSprintFlag
-        p49.getSprintFlag = function() return true end
-        local ok, err = pcall(oldStartVault, p49, p50)
-        p49.getSprintFlag = oldFlag
-        if char then char:SetAttribute("Sprinting", oldSprint) end
-        if not ok then error(err) end
-    else
-        return oldStartVault(p49, p50)
-    end
-end
-
---Auto Vault
+--vault
 
 
 
@@ -1305,12 +1240,6 @@ local Logic = {
         end,
         SetAntiAutoParry = function(enabled: boolean)
             antiAutoParryEnabled = enabled
-        end,
-        SetFastVault = function(enabled: boolean)
-            fastVaultEnabled = enabled
-        end,
-        SetVaultMode = function(mode: string)
-            vaultMode = mode
         end
     },
     ESP = ESP,

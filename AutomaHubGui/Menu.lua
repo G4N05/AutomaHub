@@ -136,29 +136,6 @@ PalletSection:Slider({
     end
 })
 
-local VaultSection = CombatTab:Section({ Title = "Vault Settings" })
-VaultSection:Dropdown({
-    Title = "Vault Mode",
-    Desc = "Select Vault Mode/Speed",
-    Values = { "Normal", "Velocity", "Instant" },
-    Value = "Normal",
-    Callback = function(value: string)
-        if Combat and Combat.SetVaultMode then
-            Combat.SetVaultMode(value)
-        end
-    end
-})
-VaultSection:Toggle({
-    Title = "Fast Vault",
-    Desc = "Force fast vaulting conditions",
-    Value = false,
-    Callback = function(value: boolean)
-        if Combat and Combat.SetFastVault then
-            Combat.SetFastVault(value)
-        end
-    end
-})
-
 local SkillcheckSection = CombatTab:Section({ Title = "Skillcheck Settings" })
 SkillcheckSection:Toggle({
     Title = "Auto Skillcheck",
