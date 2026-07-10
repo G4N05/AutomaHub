@@ -91,6 +91,33 @@ RunService.Heartbeat:Connect(function()
     
     killerDistance = nearest
     killerRoot = nearestRoot
+
+    -- ponytail: check if the nearest killer is currently attacking or holding a lunge while we are in range
+    if autoParryEnabled and nearestRoot and nearest <= parryDistance then
+        local kChar = nearestRoot.Parent
+        local hum = kChar and kChar:FindFirstChildOfClass("Humanoid")
+        local animator = hum and hum:FindFirstChildOfClass("Animator")
+        if animator then
+            local isAttacking = false
+            for _, track in ipairs(animator:GetPlayingAnimationTracks()) do
+                local id = track.Animation and track.Animation.AnimationId
+                local animId = id and tostring(id):match("%d+") or ""
+                local trackName = tostring(track.Name):lower()
+                if ATTACK_ANIM_IDS[animId] 
+                   or animId == "139369275981139" 
+                   or trackName:find("attack") 
+                   or trackName:find("lunge") 
+                   or trackName:find("swing") 
+                   or trackName:find("slash") then
+                    isAttacking = true
+                    break
+                end
+            end
+            if isAttacking then
+                attemptParry(parryDistance)
+            end
+        end
+    end
 end)
 
 -- Optimized RaycastParams instance (reused to prevent GC overhead)
@@ -106,16 +133,16 @@ local function hasLineOfSight(): boolean
 end
 
 -- Animation Event Hooks
-local animHandlers: { (plr: Player, idRaw: any, animId: string) -> () } = {}
+local animHandlers: { (plr: Player, idRaw: any, animId: string, track: AnimationTrack?) -> () } = {}
 local killerAnimConnections: { RBXScriptConnection } = {}
 
-local function onKillerAnim(fn: (plr: Player, idRaw: any, animId: string) -> ())
+local function onKillerAnim(fn: (plr: Player, idRaw: any, animId: string, track: AnimationTrack?) -> ())
     table.insert(animHandlers, fn)
 end
 
-local function fireAnim(plr: Player, idRaw: any, animId: string)
+local function fireAnim(plr: Player, idRaw: any, animId: string, track: AnimationTrack)
     for _, h in ipairs(animHandlers) do
-        pcall(h, plr, idRaw, animId)
+        pcall(h, plr, idRaw, animId, track)
     end
 end
 
@@ -133,7 +160,7 @@ local function hookKillerAnimators()
                     table.insert(killerAnimConnections, animator.AnimationPlayed:Connect(function(animTrack)
                         local id = animTrack.Animation and animTrack.Animation.AnimationId
                         local animId = id and tostring(id):match("%d+") or ""
-                        fireAnim(plr, id, animId)
+                        fireAnim(plr, id, animId, animTrack)
                     end))
                 end
             end
@@ -150,6 +177,7 @@ local ATTACK_ANIM_IDS: { [string]: boolean } = {
     ["118907603246885"] = true, ["122812055447896"] = true, ["110355011987939"] = true,
     ["135002183282873"] = true, ["105374834496520"] = true, ["138720291317243"] = true,
     ["115244153053858"] = true, ["106871536134254"] = true,
+    ["139369275981139"] = true, -- Slasher basic attack
 }
 local lastPrePress, rearmCooldown, postParryCooldown, lastAutoPress = 0, 0.08, 0.25, 0
 local facingDotThreshold = 0.1
@@ -234,8 +262,16 @@ end
 DamagevizEvent.OnClientEvent:Connect(triggerParry)
 if SlowAttack then SlowAttack.OnClientEvent:Connect(triggerParry) end
 
-onKillerAnim(function(plr, idRaw, animId)
-    if ATTACK_ANIM_IDS[animId] then triggerParry() end
+onKillerAnim(function(plr, idRaw, animId, track)
+    local trackName = track and tostring(track.Name):lower() or ""
+    if ATTACK_ANIM_IDS[animId] 
+       or animId == "139369275981139"
+       or trackName:find("attack") 
+       or trackName:find("lunge") 
+       or trackName:find("swing") 
+       or trackName:find("slash") then
+        triggerParry()
+    end
 end)
 
 parryResult.OnClientEvent:Connect(function(success, cd)
