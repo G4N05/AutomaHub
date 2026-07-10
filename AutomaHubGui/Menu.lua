@@ -36,8 +36,8 @@ local Logic = (function()
         end
     end
     
-    local ok3, cdnContent = pcall(game.HttpGet, game, "https://raw.githack.com/G4N05/AutomaHub/main/AutomaHubGui/LogicFunction.lua")
-    if ok3 and not cdnContent:find("404") then
+    local ok3, cdnContent = pcall(game.HttpGet, game, "https://cdn.jsdelivr.net/gh/G4N05/AutomaHub@main/AutomaHubGui/LogicFunction.lua?t=" .. tostring(tick()))
+    if ok3 then
         local loader, err = loadstring(cdnContent)
         if loader then
             local success, module = pcall(loader)
