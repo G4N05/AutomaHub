@@ -158,6 +158,16 @@ VaultSection:Toggle({
         end
     end
 })
+VaultSection:Toggle({
+    Title = "Auto Vault",
+    Desc = "Automatically vault near windows",
+    Value = false,
+    Callback = function(value: boolean)
+        if Combat and Combat.SetAutoVault then
+            Combat.SetAutoVault(value)
+        end
+    end
+})
 
 local SkillcheckSection = CombatTab:Section({ Title = "Skillcheck Settings" })
 SkillcheckSection:Toggle({
