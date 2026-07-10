@@ -590,12 +590,25 @@ local antiParryTrack = nil
 
 function loadAntiParryTrack(char)
     local hum = char:WaitForChild("Humanoid", 10)
-    local animator = hum and hum:WaitForChild("Animator", 10)
+    if not hum then
+        warn("[AutomaHub AntiAutoParry] Humanoid not found on character!")
+        return
+    end
+    local animator = hum:WaitForChild("Animator", 5)
+    
+    local success, track
     if animator then
-        local ok, track = pcall(function() return animator:LoadAnimation(antiParryAnimation) end)
-        if ok then
-            antiParryTrack = track
-        end
+        success, track = pcall(function() return animator:LoadAnimation(antiParryAnimation) end)
+    end
+    if not success or not track then
+        success, track = pcall(function() return hum:LoadAnimation(antiParryAnimation) end)
+    end
+    
+    if success and track then
+        antiParryTrack = track
+        print("[AutomaHub AntiAutoParry] Animation loaded successfully!")
+    else
+        warn("[AutomaHub AntiAutoParry] Failed to load animation: " .. tostring(track))
     end
 end
 
@@ -628,15 +641,29 @@ local antiParryScriptId = HttpService:GenerateGUID(false)
 _G.AntiAutoParryScriptId = antiParryScriptId
 
 task.spawn(function()
+    print("[AutomaHub AntiAutoParry] Loop started with ID:", antiParryScriptId)
     while _G.AntiAutoParryScriptId == antiParryScriptId do
         task.wait(0.3)
-        if antiAutoParryEnabled and antiParryTrack and Character and Character.Parent then
-            local dist = getNearestSurvivorDistance()
-            if dist <= 15 then
-                antiParryTrack:Play()
-                antiParryTrack:AdjustWeight(0)
-                task.wait(0.05)
-                antiParryTrack:Stop()
+        if antiAutoParryEnabled then
+            if not antiParryTrack then
+                if Character and Character.Parent then
+                    loadAntiParryTrack(Character)
+                end
+            end
+            if antiParryTrack and Character and Character.Parent then
+                local dist = getNearestSurvivorDistance()
+                if dist <= 15 then
+                    print("[AutomaHub AntiAutoParry] Survivor detected at distance:", dist, "- Playing bait animation!")
+                    local pOk, pErr = pcall(function()
+                        antiParryTrack:Play()
+                        antiParryTrack:AdjustWeight(0)
+                        task.wait(0.05)
+                        antiParryTrack:Stop()
+                    end)
+                    if not pOk then
+                        warn("[AutomaHub AntiAutoParry] Error playing track:", tostring(pErr))
+                    end
+                end
             end
         end
     end
