@@ -1,6 +1,21 @@
 --!strict
 
-local WindUI = loadstring(game:HttpGet("https://raw.githubusercontent.com/Footagesus/WindUI/main/dist/main.lua"))() :: any
+-- Remove the previous instance before rebuilding the menu on re-execute.
+local previousWindow = getgenv().Window
+if previousWindow then
+    pcall(function()
+        if previousWindow.Destroy then
+            previousWindow:Destroy()
+        elseif previousWindow.Close then
+            previousWindow:Close()
+        end
+    end)
+end
+getgenv().Window = nil
+getgenv().WindUI = nil
+
+local windNonce = tostring(os.time()) .. "-" .. tostring(math.random(100000, 999999))
+local WindUI = loadstring(game:HttpGet("https://raw.githubusercontent.com/Footagesus/WindUI/main/dist/main.lua?cache=" .. windNonce))() :: any
 getgenv().WindUI = WindUI
 
 -- Get logo asset ID (works on all platforms)

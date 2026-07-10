@@ -15,33 +15,39 @@ local Logic = (function()
         if success then return module end
     end
     
-    local paths = { "AutomaHub/AutomaHubGui/LogicFunction.lua", "AutomaHubGui/LogicFunction.lua" }
-    for _, path in ipairs(paths) do
-        local ok, fileContent = pcall(readfile, path)
-        if ok then
-            local loader, err = loadstring(fileContent)
-            if loader then
-                local success, module = pcall(loader)
-                if success and module then return module end
+    -- Only prefer local source when developer mode is explicitly enabled.
+    -- Otherwise an old executor file can shadow the latest GitHub commit.
+    if _G.AutomaHubDeveloperMode and readfile and isfile then
+        local paths = { "AutomaHub/AutomaHubGui/LogicFunction.lua", "AutomaHubGui/LogicFunction.lua" }
+        for _, path in ipairs(paths) do
+            if isfile(path) then
+                local ok, fileContent = pcall(readfile, path)
+                if ok then
+                    local loader = loadstring(fileContent)
+                    if loader then
+                        local success, module = pcall(loader)
+                        if success and module then return module end
+                    end
+                end
             end
         end
     end
     
-    local ok2, remoteContent = pcall(game.HttpGet, game, "https://raw.githubusercontent.com/G4N05/AutomaHub/main/AutomaHubGui/LogicFunction.lua?t=" .. tostring(tick()))
-    if ok2 and not remoteContent:find("Too Many Requests") and not remoteContent:find("429") then
-        local loader, err = loadstring(remoteContent)
-        if loader then
-            local success, module = pcall(loader)
-            if success and module then return module end
-        end
-    end
-    
-    local ok3, cdnContent = pcall(game.HttpGet, game, "https://cdn.jsdelivr.net/gh/G4N05/AutomaHub@main/AutomaHubGui/LogicFunction.lua?t=" .. tostring(tick()))
-    if ok3 then
-        local loader, err = loadstring(cdnContent)
-        if loader then
-            local success, module = pcall(loader)
-            if success and module then return module end
+    local ref = getgenv().AutomaHubCommit or "main"
+    local logicUrls = {
+        "https://raw.githubusercontent.com/G4N05/AutomaHub/" .. ref .. "/AutomaHubGui/LogicFunction.lua",
+        "https://cdn.jsdelivr.net/gh/G4N05/AutomaHub@" .. ref .. "/AutomaHubGui/LogicFunction.lua",
+    }
+    for _, url in ipairs(logicUrls) do
+        local ok, remoteContent = pcall(game.HttpGet, game, url)
+        if ok and type(remoteContent) == "string"
+            and not remoteContent:find("Too Many Requests", 1, true)
+            and not remoteContent:find("429", 1, true) then
+            local loader = loadstring(remoteContent)
+            if loader then
+                local success, module = pcall(loader)
+                if success and module then return module end
+            end
         end
     end
     
