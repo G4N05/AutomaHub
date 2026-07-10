@@ -212,21 +212,18 @@ local function doParryPress()
             if ctrl:CanUse() then ctrl:Parry() end
         end)
         if not ok then parryController = nil end
-    else
-        warn("[AutomaHub Debug] Controller is nil!")
     end
     task.delay(0.05, function() isAutoParrying = false end)
 end
 
 local function attemptParry(maxRange: number)
-    if not autoParryEnabled then warn("[AutomaHub Debug] AutoParry disabled") return end
-    if killerDistance > maxRange then warn("[AutomaHub Debug] Out of range:", killerDistance, ">", maxRange) return end
-    if not canParry() then warn("[AutomaHub Debug] canParry() is false. CD:", isOnCooldown, "Silenced:", isSilenced) return end
-    if (os.clock() - lastPrePress) < rearmCooldown then warn("[AutomaHub Debug] Rearm cooldown active") return end
-    if not hasLineOfSight() then warn("[AutomaHub Debug] No line of sight") return end
-    if not isKillerFacing() then warn("[AutomaHub Debug] Killer not facing") return end
+    if not autoParryEnabled then return end
+    if killerDistance > maxRange then return end
+    if not canParry() then return end
+    if (os.clock() - lastPrePress) < rearmCooldown then return end
+    if not hasLineOfSight() then return end
+    if not isKillerFacing() then return end
     
-    warn("[AutomaHub Debug] attemptParry PASSED ALL CHECKS, calling doParryPress()")
     doParryPress()
 end
 
