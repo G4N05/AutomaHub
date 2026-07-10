@@ -8,7 +8,6 @@ local RunService        = game:GetService("RunService")
 local UserInputService  = game:GetService("UserInputService")
 local Teams             = game:GetService("Teams")
 local Workspace         = game:GetService("Workspace")
-local VirtualInputManager = game:GetService("VirtualInputManager")
 
 local LocalPlayer = Players.LocalPlayer
 
@@ -174,52 +173,42 @@ local function isKillerFacing(): boolean
     return dot >= facingDotThreshold
 end
 
+local parryController: any = nil
+local function resolveParryController(): any
+    if parryController then return parryController end
+    -- Match instance by its exact class metatable (ParryClient), same as the
+    -- working standalone script. The old loose duck-typing scan grabbed the
+    -- first table with .Parry/.CanUse (usually the class module/prototype),
+    -- so :Parry() ran without instance state and silently did nothing.
+    local ok, ParryClient = pcall(function()
+        return require(ReplicatedStorage.Modules.Items.ParryClient)
+    end)
+    if not ok or not ParryClient then return nil end
+    if type(getgc) ~= "function" then return nil end
+
+    for _, v in ipairs(getgc(true)) do
+        if type(v) == "table" and getmetatable(v) == ParryClient then
+            parryController = v
+            break
+        end
+    end
+
+    return parryController
+end
+
 local function doParryPress()
     isAutoParrying = true
     lastAutoPress = os.clock()
     lastPrePress = os.clock()
-
-    -- Check for mobile parry button
-    local PlayerGui = LocalPlayer:FindFirstChildOfClass("PlayerGui")
-    local survivorMob = PlayerGui and PlayerGui:FindFirstChild("Survivor-mob")
-    local parryButton = survivorMob and survivorMob:FindFirstChild("Controls") and survivorMob.Controls:FindFirstChild("Gui-mob")
-
-    local isMobileButtonActive = false
-    if parryButton and parryButton.Visible then
-        local screenGui = parryButton:FindFirstAncestorOfClass("ScreenGui")
-        if screenGui and screenGui.Enabled then
-            isMobileButtonActive = true
-        end
-    end
-
-    if isMobileButtonActive and parryButton then
-        local fired = false
-        if firesignal then
-            firesignal(parryButton.MouseButton1Down)
-            fired = true
-        end
-        if getconnections then
-            for _, connection in ipairs(getconnections(parryButton.MouseButton1Down)) do
-                connection:Fire()
-                fired = true
-            end
-        end
-        if not fired then
-            local pos = parryButton.AbsolutePosition + (parryButton.AbsoluteSize / 2)
-            VirtualInputManager:SendMouseButtonEvent(pos.X, pos.Y, 0, true, game)
-            task.wait(0.05)
-            VirtualInputManager:SendMouseButtonEvent(pos.X, pos.Y, 0, false, game)
-        end
+    local ctrl = resolveParryController()
+    if ctrl then
+        local ok, err = pcall(function()
+            if ctrl:CanUse() then ctrl:Parry() end
+        end)
+        if not ok then parryController = nil end
     else
-        -- PC virtual input: right click
-        local viewportSize = Workspace.CurrentCamera and Workspace.CurrentCamera.ViewportSize or Vector2.new(1000, 800)
-        local posX = viewportSize.X / 2
-        local posY = viewportSize.Y / 2
-        VirtualInputManager:SendMouseButtonEvent(posX, posY, 1, true, game)
-        task.wait(0.05)
-        VirtualInputManager:SendMouseButtonEvent(posX, posY, 1, false, game)
+        warn("[AutomaHub Debug] Controller is nil!")
     end
-
     task.delay(0.05, function() isAutoParrying = false end)
 end
 
@@ -263,7 +252,7 @@ end)
 
 CollectionService:GetInstanceAddedSignal("Silenced"):Connect(function(i) if i == Character then isSilenced = true end end)
 CollectionService:GetInstanceRemovedSignal("Silenced"):Connect(function(i) if i == Character then isSilenced = false end end)
-LocalPlayer.CharacterAdded:Connect(function() isOnCooldown, isResolving, isSilenced = false, false, false end)
+LocalPlayer.CharacterAdded:Connect(function() isOnCooldown, isResolving, isSilenced, parryController = false, false, false, nil end)
 
 if KillerTeam then
     hookKillerAnimators()
@@ -422,6 +411,8 @@ local CONFIG_SC = {
     zoneMax      = 116,
 }
 
+local VirtualInputManager = game:GetService("VirtualInputManager")
+
 -- ponytail: virtual input lets Roblox's engine handle the skillcheck state naturally
 local function simulateInput()
     local PlayerGui = LocalPlayer:FindFirstChildOfClass("PlayerGui")
@@ -489,13 +480,28 @@ end)
 -- Auto Drop Pallete
 -- =====================================================================
 local Players = game:GetService("Players")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local RunService = game:GetService("RunService")
 local CollectionService = game:GetService("CollectionService")
+local UIS = game:GetService("UserInputService")
 
 local LocalPlayer = Players.LocalPlayer
+local PalletDropEvent = ReplicatedStorage:WaitForChild("Remotes"):WaitForChild("Pallet"):WaitForChild("PalletDropEvent")
 
 local PLAYER_INTERACT_DISTANCE = 6 
 local droppedDebounce = {}
+
+local keybindConnection
+keybindConnection = UIS.InputBegan:Connect(function(input, gpe)
+    if gpe then return end
+    if input.KeyCode == Enum.KeyCode.J then
+        TRIGGER_DISTANCE = math.round((TRIGGER_DISTANCE + 0.1) * 10) / 10
+        print("AutoPallet Jarak Trigger Bertambah:", TRIGGER_DISTANCE)
+    elseif input.KeyCode == Enum.KeyCode.K then
+        TRIGGER_DISTANCE = math.max(0.1, math.round((TRIGGER_DISTANCE - 0.1) * 10) / 10)
+        print("AutoPallet Jarak Trigger Berkurang:", TRIGGER_DISTANCE)
+    end
+end)
 
 local killerPlayer = nil
 local function getKillerCharacter()
@@ -559,7 +565,7 @@ connection = RunService.Heartbeat:Connect(function()
                 local distToKiller = (palletPoint.Position - killerHrp.Position).Magnitude
                 if distToKiller <= TRIGGER_DISTANCE then
                     droppedDebounce[palletPoint] = true
-                    task.spawn(simulateInput)
+                    PalletDropEvent:FireServer(palletPoint)
                     task.delay(5, function()
                         droppedDebounce[palletPoint] = nil
                     end)
@@ -573,11 +579,11 @@ if _G.AutoPalletConnection then
     _G.AutoPalletConnection:Disconnect()
 end
 if _G.AutoPalletKeybindConnection then
-    pcall(function() _G.AutoPalletKeybindConnection:Disconnect() end)
-    _G.AutoPalletKeybindConnection = nil
+    _G.AutoPalletKeybindConnection:Disconnect()
 end
 
 _G.AutoPalletConnection = connection
+_G.AutoPalletKeybindConnection = keybindConnection
 print("Auto Pallet Drop Script updated and optimized!")
 
 -- =====================================================================
@@ -1327,21 +1333,6 @@ local function initVeil()
     local veilLockedPlayer = nil
     local veilLockGraceUntil = 0
 
-    local pcAttackHeld = false
-    local mobileAttackHeld = false
-    local lastBtn = nil
-    local connBegan, connEnded
-
-    local scriptId = tostring(tick()) .. "_" .. tostring(math.random())
-    local marker = LocalPlayer:FindFirstChild("AutomaHubVeilMarker")
-    if not marker then
-        local newMarker = Instance.new("StringValue")
-        newMarker.Name = "AutomaHubVeilMarker"
-        newMarker.Parent = LocalPlayer
-        marker = newMarker
-    end
-    marker.Value = scriptId
-
     local function veilGetFovCenter() if veilFovFollowMouse then local m = UserInputService:GetMouseLocation() return Vector2.new(m.X, m.Y) end local vp = Workspace.CurrentCamera.ViewportSize return Vector2.new(vp.X/2, vp.Y/2) end
     local function veilGetPart(plr) return plr and plr.Character and plr.Character:FindFirstChild(VEIL_TARGET_PART) end
 
@@ -1415,29 +1406,7 @@ local function initVeil()
         veilFovCircle.Filled = false veilFovCircle.Visible = false veilFovCircle.Color = Color3.fromRGB(255, 255, 255)
     end
 
-    local connBeganPc = UserInputService.InputBegan:Connect(function(input, gpe)
-        if gpe then return end
-        if input.UserInputType == Enum.UserInputType.MouseButton1 then
-            pcAttackHeld = true
-        end
-    end)
-
-    local connEndedPc = UserInputService.InputEnded:Connect(function(input)
-        if input.UserInputType == Enum.UserInputType.MouseButton1 then
-            pcAttackHeld = false
-        end
-    end)
-
     local veilRenderConn = RunService.RenderStepped:Connect(function()
-        if marker.Value ~= scriptId then
-            veilRenderConn:Disconnect()
-            if connBegan then connBegan:Disconnect() end
-            if connEnded then connEnded:Disconnect() end
-            if connBeganPc then connBeganPc:Disconnect() end
-            if connEndedPc then connEndedPc:Disconnect() end
-            if veilFovCircle then pcall(function() veilFovCircle:Remove() end) end
-            return
-        end
         if not (AIM_CONFIG.veilSilentAim or AIM_CONFIG.veilAimLock) then
             veilTargetPos, veilTargetVel, veilTargetName = nil, nil, nil
             veilSampleName = nil veilLockedPlayer = nil
@@ -1445,51 +1414,9 @@ local function initVeil()
             return
         end
         if veilFovCircle then veilFovCircle.Visible = AIM_CONFIG.veilShowFov veilFovCircle.Radius = AIM_CONFIG.veilFovRadius veilFovCircle.Position = veilGetFovCenter() end
-        local playerGui = LocalPlayer:FindFirstChildOfClass("PlayerGui")
-        local attackBtn = playerGui
-            and playerGui:FindFirstChild("Slasher-mob")
-            and playerGui["Slasher-mob"]:FindFirstChild("Controls")
-            and playerGui["Slasher-mob"].Controls:FindFirstChild("attack")
-
-        if attackBtn ~= lastBtn then
-            if connBegan then connBegan:Disconnect() connBegan = nil end
-            if connEnded then connEnded:Disconnect() connEnded = nil end
-            if getgenv then
-                local g = getgenv()
-                if g.__tomaVeilBegan then pcall(function() g.__tomaVeilBegan:Disconnect() end) g.__tomaVeilBegan = nil end
-                if g.__tomaVeilEnded then pcall(function() g.__tomaVeilEnded:Disconnect() end) g.__tomaVeilEnded = nil end
-            end
-            mobileAttackHeld = false
-            lastBtn = attackBtn
-            if attackBtn then
-                connBegan = attackBtn.MouseButton1Down:Connect(function()
-                    mobileAttackHeld = true
-                end)
-                connEnded = attackBtn.MouseButton1Up:Connect(function()
-                    mobileAttackHeld = false
-                end)
-                if getgenv then
-                    local g = getgenv()
-                    g.__tomaVeilBegan = connBegan
-                    g.__tomaVeilEnded = connEnded
-                end
-            end
-        end
-
         local stanceChar = LocalPlayer.Character
         local inThrowStance = stanceChar and stanceChar:GetAttribute("spearmode") == true
-
-        local isMobile = UserInputService.TouchEnabled 
-            or not UserInputService.KeyboardEnabled 
-            or (playerGui and playerGui:FindFirstChild("Slasher-mob") ~= nil)
-
-        local inputHolding = false
-        if isMobile then
-            inputHolding = mobileAttackHeld
-        else
-            inputHolding = pcAttackHeld
-        end
-        local holding = inThrowStance and inputHolding
+        local holding = inThrowStance == true
         local target
         if holding then
             if not veilLockedPlayer then veilLockedPlayer = veilGetTarget() end
@@ -1546,12 +1473,6 @@ local function initVeil()
         g.__tomaVeilRender = veilRenderConn
         if g.__tomaVeilFov then pcall(function() g.__tomaVeilFov:Remove() end) end
         g.__tomaVeilFov = veilFovCircle
-        if g.__tomaVeilBegan then pcall(function() g.__tomaVeilBegan:Disconnect() end) g.__tomaVeilBegan = nil end
-        if g.__tomaVeilEnded then pcall(function() g.__tomaVeilEnded:Disconnect() end) g.__tomaVeilEnded = nil end
-        if g.__tomaVeilBeganPc then pcall(function() g.__tomaVeilBeganPc:Disconnect() end) g.__tomaVeilBeganPc = nil end
-        if g.__tomaVeilEndedPc then pcall(function() g.__tomaVeilEndedPc:Disconnect() end) g.__tomaVeilEndedPc = nil end
-        g.__tomaVeilBeganPc = connBeganPc
-        g.__tomaVeilEndedPc = connEndedPc
     end
 end
 
