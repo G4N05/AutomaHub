@@ -14,7 +14,7 @@ local function fetchScript(path: string): any
         end
     end
     if not content then
-        local ok, res = pcall(game.HttpGet, game, baseUrl .. path .. "?t=" .. tostring(tick()))
+        local ok, res = pcall(game.HttpGet, game, baseUrl .. path)
         if ok and res and not res:find("Too Many Requests") and not res:find("429") then
             content = res
         end
