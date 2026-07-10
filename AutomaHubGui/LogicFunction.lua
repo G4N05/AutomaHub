@@ -590,37 +590,56 @@ print("Auto Pallet Drop Script updated and optimized!")
 -- Auto Vault
 -- =====================================================================
 
--- Flush helper: strips existing blocked tags based on current toggle state
+-- ponytail: properly disconnect old connections every run (fixes match-2 dead-conn bug)
+-- debounce per instance prevents server feedback loop (removes lag from spectator)
+local vaultWindowDebounce = {}
+local vaultPalletDebounce = {}
+
+do
+    local g = getgenv()
+    if g.__vaultBlockedConn    then pcall(function() g.__vaultBlockedConn:Disconnect()       end) end
+    if g.__vaultPalletConn     then pcall(function() g.__vaultPalletConn:Disconnect()        end) end
+
+    g.__vaultBlockedConn = CollectionService:GetInstanceAddedSignal("Blocked"):Connect(function(inst)
+        if not g.__autoWindowVaultEnabled then return end
+        if vaultWindowDebounce[inst] then return end -- skip if recently handled
+        vaultWindowDebounce[inst] = true
+        CollectionService:RemoveTag(inst, "Blocked")
+        task.delay(1, function() vaultWindowDebounce[inst] = nil end)
+    end)
+
+    g.__vaultPalletConn = CollectionService:GetInstanceAddedSignal("PalletBlocked"):Connect(function(inst)
+        if not g.__autoPalletVaultEnabled then return end
+        if vaultPalletDebounce[inst] then return end
+        vaultPalletDebounce[inst] = true
+        CollectionService:RemoveTag(inst, "PalletBlocked")
+        task.delay(1, function() vaultPalletDebounce[inst] = nil end)
+    end)
+end
+
 local function flushBlockedTags()
     if autoWindowVaultEnabled then
         for _, v in ipairs(CollectionService:GetTagged("Blocked")) do
-            CollectionService:RemoveTag(v, "Blocked")
+            if not vaultWindowDebounce[v] then
+                vaultWindowDebounce[v] = true
+                CollectionService:RemoveTag(v, "Blocked")
+                local ref = v
+                task.delay(1, function() vaultWindowDebounce[ref] = nil end)
+            end
         end
     end
     if autoPalletVaultEnabled then
         for _, v in ipairs(CollectionService:GetTagged("PalletBlocked")) do
-            CollectionService:RemoveTag(v, "PalletBlocked")
+            if not vaultPalletDebounce[v] then
+                vaultPalletDebounce[v] = true
+                CollectionService:RemoveTag(v, "PalletBlocked")
+                local ref = v
+                task.delay(1, function() vaultPalletDebounce[ref] = nil end)
+            end
         end
     end
 end
 getgenv().__autoVaultFlush = flushBlockedTags
-
--- ponytail: register signals ONCE globally — prevents listener accumulation across script reloads
-if not getgenv().__autoVaultConnInstalled then
-    getgenv().__autoVaultConnInstalled = true
-
-    CollectionService:GetInstanceAddedSignal("Blocked"):Connect(function(instance)
-        if getgenv().__autoWindowVaultEnabled then
-            CollectionService:RemoveTag(instance, "Blocked")
-        end
-    end)
-
-    CollectionService:GetInstanceAddedSignal("PalletBlocked"):Connect(function(instance)
-        if getgenv().__autoPalletVaultEnabled then
-            CollectionService:RemoveTag(instance, "PalletBlocked")
-        end
-    end)
-end
 
 -- VISUAL (ESP) MODULE
 
