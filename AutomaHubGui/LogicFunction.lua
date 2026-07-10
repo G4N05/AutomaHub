@@ -760,8 +760,9 @@ do
     local Actions = require(Survivors:WaitForChild("SurvivorActions"))
 
     -- 1. Hook Always Fast Vault (hanya sekali setup, guard by flag)
-    AnimController._isFacingStraightEnough = function()
-        if not fastVaultEnabled then return AnimController._isFacingStraightEnough end
+    local oldIsFacing = AnimController._isFacingStraightEnough
+    AnimController._isFacingStraightEnough = function(self, ...)
+        if not fastVaultEnabled then return oldIsFacing(self, ...) end
         return true, 0
     end
 
