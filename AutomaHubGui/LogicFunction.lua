@@ -184,29 +184,27 @@ local function doParryPress()
     local survivorMob = PlayerGui and PlayerGui:FindFirstChild("Survivor-mob")
     local parryButton = survivorMob and survivorMob:FindFirstChild("Controls") and survivorMob.Controls:FindFirstChild("Gui-mob")
 
-    local isMobile = UserInputService.TouchEnabled 
-        or not UserInputService.KeyboardEnabled 
-        or (PlayerGui and PlayerGui:FindFirstChild("Survivor-mob") ~= nil)
+    local isMobileButtonActive = false
+    if parryButton and parryButton.Visible then
+        local screenGui = parryButton:FindFirstAncestorOfClass("ScreenGui")
+        if screenGui and screenGui.Enabled then
+            isMobileButtonActive = true
+        end
+    end
 
-    warn(("[AutomaHub Debug] doParryPress: isMobile=%s, parryButton=%s"):format(tostring(isMobile), tostring(parryButton ~= nil)))
-
-    if isMobile and parryButton then
+    if isMobileButtonActive and parryButton then
         local fired = false
+        if firesignal then
+            firesignal(parryButton.MouseButton1Down)
+            fired = true
+        end
         if getconnections then
-            local conns = getconnections(parryButton.MouseButton1Down)
-            warn(("[AutomaHub Debug] getconnections count: %d"):format(#conns))
-            for _, connection in ipairs(conns) do
+            for _, connection in ipairs(getconnections(parryButton.MouseButton1Down)) do
                 connection:Fire()
                 fired = true
             end
         end
-        if not fired and firesignal then
-            warn("[AutomaHub Debug] falling back to firesignal")
-            firesignal(parryButton.MouseButton1Down)
-            fired = true
-        end
         if not fired then
-            warn("[AutomaHub Debug] falling back to VirtualInputManager for mobile button")
             local pos = parryButton.AbsolutePosition + (parryButton.AbsoluteSize / 2)
             VirtualInputManager:SendMouseButtonEvent(pos.X, pos.Y, 0, true, game)
             task.wait(0.05)
@@ -214,7 +212,6 @@ local function doParryPress()
         end
     else
         -- PC virtual input: right click
-        warn("[AutomaHub Debug] simulating PC right click")
         local viewportSize = Workspace.CurrentCamera and Workspace.CurrentCamera.ViewportSize or Vector2.new(1000, 800)
         local posX = viewportSize.X / 2
         local posY = viewportSize.Y / 2
@@ -583,30 +580,9 @@ end
 _G.AutoPalletConnection = connection
 print("Auto Pallet Drop Script updated and optimized!")
 
--- Auto Vaulth
-
--- Unlimited Window Vault - Violence District
-
-local CollectionService = game:GetService("CollectionService")
-local RunService = game:GetService("RunService")
-
-if _G.UnlimitedVaultConn then
-    _G.UnlimitedVaultConn:Disconnect()
-end
-
--- Immediately remove from any already-blocked windows
-for _, v in ipairs(CollectionService:GetTagged("Blocked")) do
-    CollectionService:RemoveTag(v, "Blocked")
-end
-
--- Watch for new "Blocked" tags being added and instantly strip them
-_G.UnlimitedVaultConn = CollectionService:GetInstanceAddedSignal("Blocked"):Connect(function(instance)
-    CollectionService:RemoveTag(instance, "Blocked")
-end)
-
-print("Unlimited Window Vault loaded - Blocked tag cleared!")
-
+-- =====================================================================
 -- VISUAL (ESP) MODULE
+-- =====================================================================
 
 local COLOR_GEN     = Color3.fromRGB(85, 255, 85)
 local COLOR_PALLET  = Color3.fromRGB(255, 215, 0)
