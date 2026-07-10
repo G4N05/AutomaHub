@@ -42,6 +42,9 @@ LocalPlayer.CharacterAdded:Connect(function(newChar)
     Character = newChar
     Humanoid = newChar:WaitForChild("Humanoid") :: Humanoid
     RootPart = newChar:WaitForChild("HumanoidRootPart") :: BasePart
+    if loadAntiParryTrack then
+        task.spawn(loadAntiParryTrack, newChar)
+    end
 end)
 
 -- State Toggles & Distances
@@ -53,7 +56,10 @@ local autoDodgeEnabled = false
 local dodgeDistance = 25
 
 local autoPalletEnabled = false
-local TRIGGER_DISTANCE = 10.5
+local TRIGGER_DISTANCE = 13.2
+
+local antiAutoParryEnabled = false
+local loadAntiParryTrack
 
 -- Optimized Heartbeat for Killer Tracking (Only runs when Combat features are active)
 RunService.Heartbeat:Connect(function()
@@ -573,6 +579,69 @@ end
 _G.AutoPalletConnection = connection
 print("Auto Pallet Drop Script updated and optimized!")
 
+--Anti Auto Parry
+local Players = game:GetService("Players")
+local HttpService = game:GetService("HttpService")
+local LocalPlayer = Players.LocalPlayer
+
+local antiParryAnimation = Instance.new("Animation")
+antiParryAnimation.AnimationId = "rbxassetid://117042998468241"
+local antiParryTrack = nil
+
+function loadAntiParryTrack(char)
+    local hum = char:WaitForChild("Humanoid", 10)
+    local animator = hum and hum:WaitForChild("Animator", 10)
+    if animator then
+        local ok, track = pcall(function() return animator:LoadAnimation(antiParryAnimation) end)
+        if ok then
+            antiParryTrack = track
+        end
+    end
+end
+
+if Character then
+    task.spawn(loadAntiParryTrack, Character)
+end
+
+local function getNearestSurvivorDistance()
+    local myRoot = RootPart
+    if not myRoot then return 999 end
+    local minDist = 999
+    local playersList = Players:GetPlayers()
+    for i = 1, #playersList do
+        local p = playersList[i]
+        if p ~= LocalPlayer and p.Team and p.Team.Name == "Survivors" then
+            local char = p.Character
+            local hrp = char and char:FindFirstChild("HumanoidRootPart")
+            if hrp then
+                local dist = (myRoot.Position - hrp.Position).Magnitude
+                if dist < minDist then
+                    minDist = dist
+                end
+            end
+        end
+    end
+    return minDist
+end
+
+local antiParryScriptId = HttpService:GenerateGUID(false)
+_G.AntiAutoParryScriptId = antiParryScriptId
+
+task.spawn(function()
+    while _G.AntiAutoParryScriptId == antiParryScriptId do
+        task.wait(0.3)
+        if antiAutoParryEnabled and antiParryTrack and Character and Character.Parent then
+            local dist = getNearestSurvivorDistance()
+            if dist <= 15 then
+                antiParryTrack:Play()
+                antiParryTrack:AdjustWeight(0)
+                task.wait(0.05)
+                antiParryTrack:Stop()
+            end
+        end
+    end
+end)
+
 -- =====================================================================
 -- VISUAL (ESP) MODULE
 -- =====================================================================
@@ -1060,6 +1129,9 @@ local Logic = {
         end,
         SetPalletDistance = function(dist: number)
             TRIGGER_DISTANCE = dist
+        end,
+        SetAntiAutoParry = function(enabled: boolean)
+            antiAutoParryEnabled = enabled
         end
     },
     ESP = ESP,

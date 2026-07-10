@@ -57,6 +57,7 @@ local ThemeTab = Window:Tab({ Title = "Theme", Icon = "palette" })
 local CombatTab = Window:Tab({ Title = "Combat", Icon = "swords" })
 local VisualTab = Window:Tab({ Title = "Visual", Icon = "eye" })
 local AimTab = Window:Tab({ Title = "Aim", Icon = "crosshair" })
+local AntiTab = Window:Tab({ Title = "Anti", Icon = "shield-alert" })
 
 -- Combat Tab Sections (Tidied and organized)
 local ParrySection = CombatTab:Section({ Title = "Auto Parry Settings" })
@@ -320,6 +321,19 @@ AimVeilSection:Toggle({
     Callback = function(value: boolean)
         if Aim and Aim.SetVeilEnableLead then
             Aim.SetVeilEnableLead(value)
+        end
+    end
+})
+
+-- Anti Tab Settings
+local AntiSection = AntiTab:Section({ Title = "Anti Settings" })
+AntiSection:Toggle({
+    Title = "Anti Auto Parry",
+    Desc = "Bait survivors' auto parry by playing a silent swing animation",
+    Value = false,
+    Callback = function(value: boolean)
+        if Combat and Combat.SetAntiAutoParry then
+            Combat.SetAntiAutoParry(value)
         end
     end
 })
