@@ -56,9 +56,6 @@ local dodgeDistance = 25
 local autoPalletEnabled = false
 local TRIGGER_DISTANCE = 13.2
 
-local autoWindowVaultEnabled = false
-local autoPalletVaultEnabled = false
-
 -- Optimized Heartbeat for Killer Tracking (Only runs when Combat features are active)
 RunService.Heartbeat:Connect(function()
     if not autoParryEnabled and not autoDodgeEnabled then return end
@@ -586,140 +583,28 @@ end
 _G.AutoPalletConnection = connection
 print("Auto Pallet Drop Script updated and optimized!")
 
--- =====================================================================
--- Auto Vault (Fast Window + Pallet Slide)
--- =====================================================================
+-- Auto Vaulth
 
-local ReplicatedStorageVault = game:GetService("ReplicatedStorage")
+-- Unlimited Window Vault - Violence District
 
--- Require game modules once
-local SurvivorActions          = require(ReplicatedStorageVault.Modules.Survivors.SurvivorActions)
-local SurvivorAnimationsCtrl   = require(ReplicatedStorageVault.Modules.Survivors.SurvivorAnimationsController)
+local CollectionService = game:GetService("CollectionService")
+local RunService = game:GetService("RunService")
 
--- Override isFacingStraightEnough so vault isn't blocked by angle check
-local _oldFacingStraight = SurvivorAnimationsCtrl._isFacingStraightEnough
-SurvivorAnimationsCtrl._isFacingStraightEnough = function(...)
-    if autoWindowVaultEnabled or autoPalletVaultEnabled then return true end
-    return _oldFacingStraight(...)
+if _G.UnlimitedVaultConn then
+    _G.UnlimitedVaultConn:Disconnect()
 end
 
--- Hook __index of HumanoidRootPart.Velocity to spoof speed (triggers fast vault animation)
--- Only active when vault is enabled, checked per-call so no Heartbeat cost
-local function isCalledFromVaultStack()
-    for i = 2, 10 do
-        local ok, src = pcall(debug.info, i, "s")
-        if not ok or not src then break end
-        if src:find("SurvivorAnimationsController") or src:find("SurvivorActions") or src:find("CheckInterractable") then
-            return true
-        end
-    end
-    return false
+-- Immediately remove from any already-blocked windows
+for _, v in ipairs(CollectionService:GetTagged("Blocked")) do
+    CollectionService:RemoveTag(v, "Blocked")
 end
 
-local _vaultIndexHook
-if hookmetamethod then
-    local _oldIndex
-    _oldIndex = hookmetamethod(game, "__index", function(self, key)
-        if (autoWindowVaultEnabled or autoPalletVaultEnabled)
-            and not checkcaller()
-            and key == "Velocity"
-            and self.Name == "HumanoidRootPart"
-            and isCalledFromVaultStack()
-        then
-            return Vector3.new(20, 0, 0)
-        end
-        return _oldIndex(self, key)
-    end)
-end
-
--- ponytail: cache controller via lazy-find once (NOT getgc every frame)
-local _cachedController = nil
-local _controllerSearched = false
-local function getController()
-    if _cachedController then return _cachedController end
-    if _controllerSearched then return nil end
-    -- Try getgc once and cache the result
-    if getgc then
-        for _, v in ipairs(getgc(true)) do
-            if type(v) == "table" and type(rawget(v, "startCooldown")) == "function" and type(rawget(v, "prompts")) == "table" then
-                _cachedController = v
-                return v
-            end
-        end
-    end
-    _controllerSearched = true
-    return nil
-end
-
--- Hook controller.getSprintFlag once to force sprint (required for fast vault)
-local _sprintHooked = false
-local function tryHookController(c)
-    if _sprintHooked or not c then return end
-    _sprintHooked = true
-    local _oldSprint = c.getSprintFlag
-    c.getSprintFlag = function(self)
-        if (autoWindowVaultEnabled or autoPalletVaultEnabled) and isCalledFromVaultStack() then
-            return true
-        end
-        if _oldSprint then return _oldSprint(self) end
-        return false
-    end
-end
-
--- Cooldown to prevent spam-triggering same window/pallet
-local VAULT_COOLDOWN     = 1.5
-local _lastVaultInstance = nil
-local _lastVaultTime     = 0
-
--- Disconnect old Heartbeat on script reload
-if _G.AutoClimbConnection then
-    pcall(function() _G.AutoClimbConnection:Disconnect() end)
-    _G.AutoClimbConnection = nil
-end
-
-local _vaultConn
-_vaultConn = RunService.Heartbeat:Connect(function()
-    -- Early-exit gate: no cost when both off
-    if not autoWindowVaultEnabled and not autoPalletVaultEnabled then return end
-
-    local char = Players.LocalPlayer.Character
-    local hrp  = char and char:FindFirstChild("HumanoidRootPart")
-    local hum  = char and char:FindFirstChildOfClass("Humanoid")
-    if not hrp or not hum or hum.Health <= 0 then return end
-    if hrp:HasTag("doing action") then return end
-
-    local c = getController()
-    if not c then return end
-    tryHookController(c)
-
-    local state = c.proximity and c.proximity.state
-    if not state then return end
-
-    local now = tick()
-    local cooldownOk = (_lastVaultInstance == nil) or (now - _lastVaultTime > VAULT_COOLDOWN)
-
-    if autoWindowVaultEnabled then
-        local vaultPoint = state.vaultPoint
-        if vaultPoint and (vaultPoint ~= _lastVaultInstance or cooldownOk) then
-            _lastVaultInstance = vaultPoint
-            _lastVaultTime     = now
-            task.spawn(function() SurvivorActions.startVault(c, vaultPoint) end)
-            return
-        end
-    end
-
-    if autoPalletVaultEnabled then
-        local palletSlidePoint = state.palletSlidePoint
-        if palletSlidePoint and (palletSlidePoint ~= _lastVaultInstance or cooldownOk) then
-            _lastVaultInstance = palletSlidePoint
-            _lastVaultTime     = now
-            task.spawn(function() SurvivorActions.startPalletSlide(c, palletSlidePoint) end)
-        end
-    end
+-- Watch for new "Blocked" tags being added and instantly strip them
+_G.UnlimitedVaultConn = CollectionService:GetInstanceAddedSignal("Blocked"):Connect(function(instance)
+    CollectionService:RemoveTag(instance, "Blocked")
 end)
 
-_G.AutoClimbConnection = _vaultConn
-print("Auto Vault (Window + Pallet) loaded!")
+print("Unlimited Window Vault loaded - Blocked tag cleared!")
 
 -- VISUAL (ESP) MODULE
 
@@ -1206,12 +1091,6 @@ local Logic = {
         end,
         SetPalletDistance = function(dist: number)
             TRIGGER_DISTANCE = dist
-        end,
-        SetAutoWindowVault = function(enabled: boolean)
-            autoWindowVaultEnabled = enabled
-        end,
-        SetAutoPalletVault = function(enabled: boolean)
-            autoPalletVaultEnabled = enabled
         end
     },
     ESP = ESP,
