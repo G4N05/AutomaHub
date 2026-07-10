@@ -799,13 +799,12 @@ do
     local function cacheState()
         _G.ActiveStateCached = nil
         task.wait(3)
-        if type(getgc) ~= "function" then return end
         for _, v in ipairs(getgc(true)) do
             if type(v) == "table" then
                 local ok1, prox    = pcall(function() return v.proximity end)
                 local ok2, cooldown = pcall(function() return v.startCooldown end)
                 local ok3, char    = pcall(function() return v.character end)
-                if ok1 and type(prox) == "table" and ok2 and type(cooldown) == "table" and ok3 and char then
+                if ok1 and type(prox) == "table" and ok2 and type(cooldown) == "table" and ok3 and type(char) == "table" then
                     _G.ActiveStateCached = v
                     break
                 end
@@ -827,28 +826,11 @@ do
 
     local lastVaultTime = 0
     local vaultCooldown = 0.3
-    local lastScan = 0
 
     _G.AutoVaultConnection = RunService.Heartbeat:Connect(function()
         if not autoVaultEnabled then return end
         local state = _G.ActiveStateCached
-        if not state then
-            if os.clock() - lastScan > 2.0 and type(getgc) == "function" then
-                lastScan = os.clock()
-                for _, v in ipairs(getgc(true)) do
-                    if type(v) == "table" then
-                        local ok1, prox    = pcall(function() return v.proximity end)
-                        local ok2, cooldown = pcall(function() return v.startCooldown end)
-                        local ok3, char    = pcall(function() return v.character end)
-                        if ok1 and type(prox) == "table" and ok2 and type(cooldown) == "table" and ok3 and char then
-                            _G.ActiveStateCached = v
-                            break
-                        end
-                    end
-                end
-            end
-            return
-        end
+        if not state or not state.proximity then return end
         local proxState = state.proximity.state
         local vaultPoint = proxState and proxState.vaultPoint
         local char = LocalPlayer.Character
