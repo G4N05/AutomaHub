@@ -582,16 +582,86 @@ local HttpService = game:GetService("HttpService")
 local LocalPlayer = Players.LocalPlayer
 
 local antiParryAnimation = Instance.new("Animation")
-antiParryAnimation.AnimationId = "rbxassetid://117042998468241"
 local antiParryTrack = nil
+local currentBaitAnimId = nil
+
+local function cleanAnimId(rawId: string): string
+    return rawId:gsub("%D", "")
+end
+
+local function getActiveKillerAnimationId(): string
+    local killerPlr = nil
+    for _, p in ipairs(Players:GetPlayers()) do
+        if p.Team and p.Team.Name == "Killer" then
+            killerPlr = p
+            break
+        end
+    end
+    
+    if not killerPlr and LocalPlayer.Team and LocalPlayer.Team.Name == "Killer" then
+        killerPlr = LocalPlayer
+    end
+    
+    if killerPlr and killerPlr.Character then
+        for _, obj in ipairs(killerPlr.Character:GetDescendants()) do
+            if obj:IsA("Animation") and obj.AnimationId ~= "" then
+                local idStr = cleanAnimId(obj.AnimationId)
+                if ATTACK_ANIM_IDS[idStr] then
+                    return "rbxassetid://" .. idStr
+                end
+            end
+        end
+    end
+    
+    local killerName = nil
+    if killerPlr then
+        if killerPlr.Character then
+            for _, child in ipairs(killerPlr.Character:GetChildren()) do
+                if child:IsA("Tool") then
+                    killerName = child.Name
+                    break
+                end
+            end
+            if not killerName then
+                killerName = killerPlr.Character.Name
+            end
+        end
+    end
+    
+    local backupId = nil
+    local ReplicatedStorage = game:GetService("ReplicatedStorage")
+    for _, obj in ipairs(ReplicatedStorage:GetDescendants()) do
+        if obj:IsA("Animation") and obj.AnimationId ~= "" then
+            local idStr = cleanAnimId(obj.AnimationId)
+            if ATTACK_ANIM_IDS[idStr] then
+                backupId = idStr
+                if killerName and (obj.Name:lower():find(killerName:lower()) or (obj.Parent and obj.Parent.Name:lower():find(killerName:lower()))) then
+                    return "rbxassetid://" .. idStr
+                end
+            end
+        end
+    end
+    
+    if backupId then
+        return "rbxassetid://" .. backupId
+    end
+    return "rbxassetid://117042998468241"
+end
 
 function loadAntiParryTrack(char)
     local hum = char:WaitForChild("Humanoid", 10)
     if not hum then
-        warn("[AutomaHub AntiAutoParry] Humanoid not found on character!")
         return
     end
     local animator = hum:WaitForChild("Animator", 5)
+    
+    local targetId = getActiveKillerAnimationId()
+    if antiParryTrack and currentBaitAnimId == targetId then
+        return
+    end
+    
+    currentBaitAnimId = targetId
+    antiParryAnimation.AnimationId = targetId
     
     local success, track
     if animator then
@@ -603,9 +673,8 @@ function loadAntiParryTrack(char)
     
     if success and track then
         antiParryTrack = track
-        print("[AutomaHub AntiAutoParry] Animation loaded successfully!")
     else
-        warn("[AutomaHub AntiAutoParry] Failed to load animation: " .. tostring(track))
+        antiParryTrack = nil
     end
 end
 
@@ -638,7 +707,6 @@ local antiParryScriptId = HttpService:GenerateGUID(false)
 _G.AntiAutoParryScriptId = antiParryScriptId
 
 task.spawn(function()
-    print("[AutomaHub AntiAutoParry] Loop started with ID:", antiParryScriptId)
     while _G.AntiAutoParryScriptId == antiParryScriptId do
         task.wait(0.3)
         if antiAutoParryEnabled then
@@ -650,16 +718,12 @@ task.spawn(function()
             if antiParryTrack and Character and Character.Parent then
                 local dist = getNearestSurvivorDistance()
                 if dist <= 15 then
-                    print("[AutomaHub AntiAutoParry] Survivor detected at distance:", dist, "- Playing bait animation!")
-                    local pOk, pErr = pcall(function()
+                    pcall(function()
                         antiParryTrack:Play()
                         antiParryTrack:AdjustWeight(0)
                         task.wait(0.05)
                         antiParryTrack:Stop()
                     end)
-                    if not pOk then
-                        warn("[AutomaHub AntiAutoParry] Error playing track:", tostring(pErr))
-                    end
                 end
             end
         end
