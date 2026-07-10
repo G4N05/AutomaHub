@@ -3,6 +3,22 @@
 local WindUI = loadstring(game:HttpGet("https://raw.githubusercontent.com/Footagesus/WindUI/main/dist/main.lua"))() :: any
 getgenv().WindUI = WindUI
 
+-- Clean up old WindUI screens to prevent duplicate windows when re-executing
+local parentGui = (function()
+    local ok, hui = pcall(function() return (getgenv().gethui or gethui)() end)
+    if ok and hui then return hui end
+    local okc, core = pcall(function() return game:GetService("CoreGui") end)
+    if okc and core then return core end
+    return game:GetService("Players").LocalPlayer:WaitForChild("PlayerGui")
+end)()
+
+for _, child in ipairs(parentGui:GetChildren()) do
+    if child:IsA("ScreenGui") and (child.Name == "WindUI" or child.Name:find("WindUI") or child:FindFirstChild("AutomaHub") or child:FindFirstChild("Window")) then
+        pcall(function() child:Destroy() end)
+    end
+end
+
+
 -- Get logo asset ID (works on all platforms)
 local LOGO_ASSET_ID = "rbxassetid://89249705975584"
 local asset = LOGO_ASSET_ID
