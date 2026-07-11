@@ -36,8 +36,17 @@ local Logic = (function()
         end
     end
     
-    local ok3, cdnContent = pcall(game.HttpGet, game, "https://cdn.jsdelivr.net/gh/G4N05/AutomaHub@main/AutomaHubGui/LogicFunction.lua?t=" .. tostring(tick()))
-    if ok3 then
+    local ok3, githackContent = pcall(game.HttpGet, game, "https://raw.githack.com/G4N05/AutomaHub/main/AutomaHubGui/LogicFunction.lua?t=" .. tostring(tick()))
+    if ok3 and not githackContent:find("Too Many Requests") and not githackContent:find("429") then
+        local loader, err = loadstring(githackContent)
+        if loader then
+            local success, module = pcall(loader)
+            if success and module then return module end
+        end
+    end
+    
+    local ok4, cdnContent = pcall(game.HttpGet, game, "https://cdn.jsdelivr.net/gh/G4N05/AutomaHub@main/AutomaHubGui/LogicFunction.lua?t=" .. tostring(tick()))
+    if ok4 then
         local loader, err = loadstring(cdnContent)
         if loader then
             local success, module = pcall(loader)
