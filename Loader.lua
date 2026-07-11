@@ -6,7 +6,7 @@ getgenv().AutomaHubLoaderModule = true
 
 local function fetchScript(path: string): any
     local content
-    if isfile then
+    if _G.AutomaHubDeveloperMode and isfile then
         if isfile(path) then
             pcall(function() content = readfile(path) end)
         elseif isfile("AutomaHub/" .. path) then
