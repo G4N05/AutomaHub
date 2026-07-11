@@ -4,42 +4,18 @@ local baseUrl = "https://raw.githubusercontent.com/G4N05/AutomaHub/main/"
 
 getgenv().AutomaHubLoaderModule = true
 
-print("[AutomaHub] Loader initialized v2 (No-Cache)")
-
-local function httpGet(url: string): (boolean, string)
-    -- Try using executor-specific request/http_request if available to bypass game:HttpGet caching
-    local request = (syn and syn.request) or request or http_request or (http and http.request)
-    if typeof(request) == "function" then
-        local success, response = pcall(request, {
-            Url = url,
-            Method = "GET",
-            Headers = {
-                ["Cache-Control"] = "no-cache",
-                ["Pragma"] = "no-cache"
-            }
-        })
-        if success and typeof(response) == "table" and response.StatusCode == 200 then
-            return true, response.Body
-        end
-    end
-    -- Fallback to standard game:HttpGet
-    return pcall(game.HttpGet, game, url)
-end
-
 local function fetchScript(path: string): any
     local content
     if _G.AutomaHubDeveloperMode and typeof(isfile) == "function" and typeof(readfile) == "function" then
         if isfile(path) then
             pcall(function() content = readfile(path) end)
-            if content then print("[AutomaHub Loader] Loaded local file: " .. path) end
         elseif isfile("AutomaHub/" .. path) then
             pcall(function() content = readfile("AutomaHub/" .. path) end)
-            if content then print("[AutomaHub Loader] Loaded local file: AutomaHub/" .. path) end
         end
     end
 
     if not content then
-        local ok, res = httpGet(baseUrl .. path .. "?t=" .. tostring(tick()))
+        local ok, res = pcall(game.HttpGet, game, baseUrl .. path .. "?t=" .. tostring(tick()))
         if ok and res and not res:find("Too Many Requests") and not res:find("429") and not res:find("Not Found") and not res:find("404") then
             content = res
         end
@@ -48,7 +24,7 @@ local function fetchScript(path: string): any
     -- ponytail: live proxy fallback (raw.githack) to bypass jsdelivr's 12-24h cache when GitHub returns 429
     if not content then
         local githackUrl = "https://raw.githack.com/G4N05/AutomaHub/main/"
-        local ok, res = httpGet(githackUrl .. path .. "?t=" .. tostring(tick()))
+        local ok, res = pcall(game.HttpGet, game, githackUrl .. path .. "?t=" .. tostring(tick()))
         if ok and res and not res:find("Too Many Requests") and not res:find("429") and not res:find("Not Found") and not res:find("404") then
             content = res
         end
@@ -56,7 +32,7 @@ local function fetchScript(path: string): any
 
     if not content then
         local ghproxyUrl = "https://ghproxy.net/https://raw.githubusercontent.com/G4N05/AutomaHub/main/"
-        local ok, res = httpGet(ghproxyUrl .. path .. "?t=" .. tostring(tick()))
+        local ok, res = pcall(game.HttpGet, game, ghproxyUrl .. path .. "?t=" .. tostring(tick()))
         if ok and res and not res:find("Too Many Requests") and not res:find("429") and not res:find("Not Found") and not res:find("404") then
             content = res
         end
@@ -64,7 +40,7 @@ local function fetchScript(path: string): any
 
     if not content then
         local cdnUrl = "https://cdn.jsdelivr.net/gh/G4N05/AutomaHub@main/"
-        local ok, res = httpGet(cdnUrl .. path .. "?t=" .. tostring(tick()))
+        local ok, res = pcall(game.HttpGet, game, cdnUrl .. path .. "?t=" .. tostring(tick()))
         if ok and res and not res:find("Not Found") and not res:find("404") then
             content = res
         end
