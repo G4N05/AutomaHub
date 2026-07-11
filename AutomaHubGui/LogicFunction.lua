@@ -32,9 +32,7 @@ local Remotes = ReplicatedStorage:WaitForChild("Remotes")
 
 local KillerTeam = Teams:FindFirstChild("Killer")
 
-local killerDistance = 999
-local killerRoot: BasePart? = nil
-local killerFilterCache: { Instance } = { Character }
+
 
 LocalPlayer.CharacterAdded:Connect(function(newChar)
     Character = newChar
@@ -48,195 +46,15 @@ end)
 -- State Toggles & Distances
 
 
-local autoDodgeEnabled = false
-local dodgeDistance = 25
 
-local autoPalletEnabled = false
-local TRIGGER_DISTANCE = 13.2
 
 local antiAutoParryEnabled = false
 local loadAntiParryTrack
 
--- Optimized Heartbeat for Killer Tracking (Only runs when Combat features are active)
-RunService.Heartbeat:Connect(function()
-    if not autoDodgeEnabled then return end
-    if not RootPart or not RootPart.Parent then return end
-    
-    local nearest = 9999
-    local nearestRoot: BasePart? = nil
-    
-    table.clear(killerFilterCache)
-    table.insert(killerFilterCache, Character)
-    
-    if KillerTeam then
-        for _, plr in ipairs(KillerTeam:GetPlayers()) do
-            local kChar = plr.Character
-            if kChar then
-                table.insert(killerFilterCache, kChar)
-                local kRoot = kChar:FindFirstChild("HumanoidRootPart") :: BasePart?
-                if kRoot then
-                    local d = (RootPart.Position - kRoot.Position).Magnitude
-                    if d < nearest then
-                        nearest = d
-                        nearestRoot = kRoot
-                    end
-                end
-            end
-        end
-    end
-    
-    killerDistance = nearest
-    killerRoot = nearestRoot
 
 
-end)
-
--- Optimized RaycastParams instance (reused to prevent GC overhead)
-local raycastParams = RaycastParams.new()
-raycastParams.FilterType = Enum.RaycastFilterType.Exclude
-raycastParams.IgnoreWater = true
-
-local function hasLineOfSight(): boolean
-    if not RootPart or not RootPart.Parent or not killerRoot or not killerRoot.Parent then return false end
-    raycastParams.FilterDescendantsInstances = killerFilterCache
-    local rayResult = Workspace:Raycast(RootPart.Position, killerRoot.Position - RootPart.Position, raycastParams)
-    return rayResult == nil
-end
-
--- Animation Event Hooks
-local animHandlers: { (plr: Player, idRaw: any, animId: string, track: AnimationTrack?) -> () } = {}
-local killerAnimConnections: { RBXScriptConnection } = {}
-
-local function onKillerAnim(fn: (plr: Player, idRaw: any, animId: string, track: AnimationTrack?) -> ())
-    table.insert(animHandlers, fn)
-end
-
-local function fireAnim(plr: Player, idRaw: any, animId: string, track: AnimationTrack)
-    for _, h in ipairs(animHandlers) do
-        pcall(h, plr, idRaw, animId, track)
-    end
-end
-
-local function hookKillerAnimators()
-    for _, c in ipairs(killerAnimConnections) do pcall(function() c:Disconnect() end) end
-    table.clear(killerAnimConnections)
-    if not KillerTeam then return end
-    
-    for _, plr in ipairs(KillerTeam:GetPlayers()) do
-        local function hook(char: Model)
-            local hum = char:WaitForChild("Humanoid", 5) :: Humanoid?
-            if hum then
-                local animator = hum:WaitForChild("Animator", 5) :: Animator?
-                if animator then
-                    table.insert(killerAnimConnections, animator.AnimationPlayed:Connect(function(animTrack)
-                        local id = animTrack.Animation and animTrack.Animation.AnimationId
-                        local animId = id and tostring(id):match("%d+") or ""
-                        fireAnim(plr, id, animId, animTrack)
-                    end))
-                end
-            end
-        end
-        if plr.Character then task.spawn(hook, plr.Character) end
-        table.insert(killerAnimConnections, plr.CharacterAdded:Connect(hook))
-    end
-end
 
 
-local ATTACK_ANIM_IDS: { [string]: boolean } = {
-    ["117042998468241"] = true, ["129784271201071"] = true, ["113255068724446"] = true,
-    ["118907603246885"] = true, ["122812055447896"] = true, ["110355011987939"] = true,
-    ["135002183282873"] = true, ["105374834496520"] = true, ["138720291317243"] = true,
-    ["115244153053858"] = true, ["106871536134254"] = true,
-    ["139369275981139"] = true, -- Slasher basic attack
-}
-
-
--- Auto Dodge Abysswalker
-local crouchHoldTime = 1.0
-local dodgeTriggerDelay = 0.1
-local dodgeSkillWindow = 2.0
-local dodgeCheckInterval = 0.1
-local ABYSS_SKILL_ID = "80411309607666"
-local isDodging = false
-local dodgeSkillPending = false
-
-local crouchController: any = nil
-local function resolveCrouchController(): any
-    if crouchController then return crouchController end
-    local ok, SAC = pcall(function()
-        return require(ReplicatedStorage.Modules.Survivors.SurvivorAnimationsController)
-    end)
-    if not ok or not SAC then return nil end
-    if type(getgc) ~= "function" then return nil end
-    for _, v in ipairs(getgc(true)) do
-        if type(v) == "table" and getmetatable(v) == SAC then
-            crouchController = v
-            break
-        end
-    end
-    return crouchController
-end
-
-local function setCrouch(state: boolean): boolean
-    local ctrl = resolveCrouchController()
-    if not ctrl then return false end
-    local ok = pcall(function() ctrl:_setCrouching(state) end)
-    if not ok then crouchController = nil end
-    return ok
-end
-
-local function doCrouch()
-    if isDodging then return end
-    isDodging = true
-    setCrouch(true)
-    task.delay(crouchHoldTime, function()
-        setCrouch(false)
-        isDodging = false
-    end)
-end
-
-LocalPlayer.CharacterAdded:Connect(function() crouchController = nil isDodging = false end)
-
-local function triggerDodge()
-    if not autoDodgeEnabled or isDodging then return end
-    if killerDistance <= dodgeDistance and hasLineOfSight() then
-        task.delay(dodgeTriggerDelay, function()
-            if not isDodging and not dodgeSkillPending and killerDistance <= dodgeDistance and hasLineOfSight() then
-                doCrouch()
-            end
-        end)
-        return
-    end
-    if dodgeSkillPending then return end
-    dodgeSkillPending = true
-    task.spawn(function()
-        local elapsed = 0
-        while elapsed < dodgeSkillWindow do
-            task.wait(dodgeCheckInterval)
-            elapsed = elapsed + dodgeCheckInterval
-            if not autoDodgeEnabled or isDodging then break end
-            if killerDistance <= dodgeDistance and hasLineOfSight() then
-                task.delay(dodgeTriggerDelay, function()
-                    if not isDodging and not dodgeSkillPending and killerDistance <= dodgeDistance and hasLineOfSight() then
-                        doCrouch()
-                    end
-                end)
-                break
-            end
-        end
-        dodgeSkillPending = false
-    end)
-end
-
-onKillerAnim(function(plr, idRaw, animId)
-    if idRaw and tostring(idRaw):find(ABYSS_SKILL_ID) then triggerDodge() end
-end)
-
-if KillerTeam then
-    hookKillerAnimators()
-    KillerTeam.PlayerAdded:Connect(hookKillerAnimators)
-    KillerTeam.PlayerRemoved:Connect(hookKillerAnimators)
-end
 
 
 -- =====================================================================
@@ -327,102 +145,7 @@ RunService.Heartbeat:Connect(function()
     end
 end)
 
--- =====================================================================
--- Auto Drop Pallete
--- =====================================================================
-local Players = game:GetService("Players")
-local ReplicatedStorage = game:GetService("ReplicatedStorage")
-local RunService = game:GetService("RunService")
-local CollectionService = game:GetService("CollectionService")
-local UIS = game:GetService("UserInputService")
 
-local LocalPlayer = Players.LocalPlayer
-
-local PLAYER_INTERACT_DISTANCE = 6 
-local droppedDebounce = {}
-
-local killerPlayer = nil
-local function getKillerCharacter()
-    if killerPlayer and killerPlayer.Parent == Players and killerPlayer.Team and killerPlayer.Team.Name == "Killer" then
-        return killerPlayer.Character
-    end
-    for _, p in ipairs(Players:GetPlayers()) do
-        if p.Team and p.Team.Name == "Killer" then
-            killerPlayer = p
-            return p.Character
-        end
-    end
-    return nil
-end
-
--- ponytail: cache pallet points list and update via signals instead of GetTagged per frame
-local palletPoints = {}
-for _, p in ipairs(CollectionService:GetTagged("PalletPoint")) do
-    if p:IsA("BasePart") then
-        table.insert(palletPoints, p)
-    end
-end
-
-if _G.AutoPalletAddConn then pcall(function() _G.AutoPalletAddConn:Disconnect() end) end
-if _G.AutoPalletRemoveConn then pcall(function() _G.AutoPalletRemoveConn:Disconnect() end) end
-
-_G.AutoPalletAddConn = CollectionService:GetInstanceAddedSignal("PalletPoint"):Connect(function(inst)
-    if inst:IsA("BasePart") and not table.find(palletPoints, inst) then
-        table.insert(palletPoints, inst)
-    end
-end)
-
-_G.AutoPalletRemoveConn = CollectionService:GetInstanceRemovedSignal("PalletPoint"):Connect(function(inst)
-    local idx = table.find(palletPoints, inst)
-    if idx then
-        table.remove(palletPoints, idx)
-    end
-end)
-
-local connection
-connection = RunService.Heartbeat:Connect(function()
-    if not autoPalletEnabled then return end
-    local char = LocalPlayer.Character
-    local hrp = char and char:FindFirstChild("HumanoidRootPart")
-    local hum = char and char:FindFirstChildOfClass("Humanoid")
-    if not hrp or not hum or hum.Health <= 50 then return end
-    
-    if hrp:HasTag("doing action") or hrp:HasTag("carried") or char:GetAttribute("carried") then
-        return
-    end
-    
-    local killerChar = getKillerCharacter()
-    local killerHrp = killerChar and killerChar:FindFirstChild("HumanoidRootPart")
-    if not killerHrp then return end
-    
-    for i = 1, #palletPoints do
-        local palletPoint = palletPoints[i]
-        if not droppedDebounce[palletPoint] then
-            local distToPlayer = (palletPoint.Position - hrp.Position).Magnitude
-            if distToPlayer <= PLAYER_INTERACT_DISTANCE then
-                local distToKiller = (palletPoint.Position - killerHrp.Position).Magnitude
-                if distToKiller <= TRIGGER_DISTANCE then
-                    droppedDebounce[palletPoint] = true
-                    task.spawn(simulateInput)
-                    task.delay(5, function()
-                        droppedDebounce[palletPoint] = nil
-                    end)
-                end
-            end
-        end
-    end
-end)
-
-if _G.AutoPalletConnection then
-    _G.AutoPalletConnection:Disconnect()
-end
-if _G.AutoPalletKeybindConnection then
-    _G.AutoPalletKeybindConnection:Disconnect()
-    _G.AutoPalletKeybindConnection = nil
-end
-
-_G.AutoPalletConnection = connection
-print("Auto Pallet Drop Script updated and optimized!")
 
 --Anti Auto Parry
 
@@ -433,6 +156,14 @@ local LocalPlayer = Players.LocalPlayer
 local antiParryAnimation = Instance.new("Animation")
 antiParryAnimation.AnimationId = "rbxassetid://117042998468241"
 local antiParryTrack = nil
+
+local ATTACK_ANIM_IDS: { [string]: boolean } = {
+    ["117042998468241"] = true, ["129784271201071"] = true, ["113255068724446"] = true,
+    ["118907603246885"] = true, ["122812055447896"] = true, ["110355011987939"] = true,
+    ["135002183282873"] = true, ["105374834496520"] = true, ["138720291317243"] = true,
+    ["115244153053858"] = true, ["106871536134254"] = true,
+    ["139369275981139"] = true, -- Slasher basic attack
+}
 
 function loadAntiParryTrack(char)
     local hum = char:WaitForChild("Humanoid", 10)
@@ -1056,20 +787,8 @@ local AIM_CONFIG = {
 local Logic = {
     Combat = {
 
-        SetAutoDodgeAbyss = function(enabled: boolean)
-            autoDodgeEnabled = enabled
-        end,
-        SetDodgeDistance = function(dist: number)
-            dodgeDistance = dist
-        end,
         SetAutoSkillcheck = function(enabled: boolean)
             autoSkillcheckEnabled = enabled
-        end,
-        SetAutoPallet = function(enabled: boolean)
-            autoPalletEnabled = enabled
-        end,
-        SetPalletDistance = function(dist: number)
-            TRIGGER_DISTANCE = dist
         end,
         SetAntiAutoParry = function(enabled: boolean)
             antiAutoParryEnabled = enabled

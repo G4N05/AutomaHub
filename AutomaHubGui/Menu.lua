@@ -59,50 +59,6 @@ local VisualTab = Window:Tab({ Title = "Visual", Icon = "eye" })
 local AimTab = Window:Tab({ Title = "Aim", Icon = "crosshair" })
 local AntiTab = Window:Tab({ Title = "Anti", Icon = "shield-alert" })
 
-local DodgeSection = CombatTab:Section({ Title = "Auto Dodge Settings" })
-DodgeSection:Toggle({
-    Title = "Auto Dodge (Abysswalker)",
-    Desc = "Automatically dodge Abysswalker skills",
-    Value = false,
-    Callback = function(value: boolean)
-        if Combat and Combat.SetAutoDodgeAbyss then
-            Combat.SetAutoDodgeAbyss(value)
-        end
-    end
-})
-
-DodgeSection:Slider({
-    Title = "Dodge Distance",
-    Value = { Min = 15, Max = 35, Default = 25 },
-    Callback = function(value: number)
-        if Combat and Combat.SetDodgeDistance then
-            Combat.SetDodgeDistance(value)
-        end
-    end
-})
-
-local PalletSection = CombatTab:Section({ Title = "Auto Drop Pallet Settings" })
-PalletSection:Toggle({
-    Title = "Auto Drop Pallet",
-    Desc = "Automatically drop nearby pallets when killer is close",
-    Value = false,
-    Callback = function(value: boolean)
-        if Combat and Combat.SetAutoPallet then
-            Combat.SetAutoPallet(value)
-        end
-    end
-})
-
-PalletSection:Slider({
-    Title = "Trigger Distance",
-    Value = { Min = 5.0, Max = 25.0, Default = 10.5, Step = 0.1 },
-    Callback = function(value: number)
-        if Combat and Combat.SetPalletDistance then
-            Combat.SetPalletDistance(value)
-        end
-    end
-})
-
 local SkillcheckSection = CombatTab:Section({ Title = "Skillcheck Settings" })
 SkillcheckSection:Toggle({
     Title = "Auto Skillcheck",
