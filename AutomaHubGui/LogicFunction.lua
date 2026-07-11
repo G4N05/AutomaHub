@@ -759,6 +759,9 @@ do
     local AnimController = require(Survivors:WaitForChild("SurvivorAnimationsController"))
     local Actions = require(Survivors:WaitForChild("SurvivorActions"))
 
+    -- Simpan referensi asli SEBELUM di-hook, buat Auto Vault panggil langsung
+    local rawStartVault = Actions.startVault
+
     -- 1. Hook Always Fast Vault (hanya sekali setup, guard by flag)
     local oldIsFacing = AnimController._isFacingStraightEnough
     AnimController._isFacingStraightEnough = function(self, ...)
@@ -780,15 +783,14 @@ do
         end
     end
 
-    local oldStartVault = Actions.startVault
     Actions.startVault = function(p49, p50)
-        if not fastVaultEnabled then return oldStartVault(p49, p50) end
+        if not fastVaultEnabled then return rawStartVault(p49, p50) end
         local char = p49.character
         local oldSprint = char and char:GetAttribute("Sprinting")
         if char then char:SetAttribute("Sprinting", true) end
         local oldFlag = p49.getSprintFlag
         p49.getSprintFlag = function() return true end
-        local ok, err = pcall(oldStartVault, p49, p50)
+        local ok, err = pcall(rawStartVault, p49, p50)
         p49.getSprintFlag = oldFlag
         if char then char:SetAttribute("Sprinting", oldSprint) end
         if not ok then error(err) end
@@ -807,9 +809,13 @@ do
                 local ok3, char = pcall(function() return v.character end)
                 if ok1 and type(prox) == "table" and ok2 and type(cooldown) == "table" and ok3 and type(char) == "table" then
                     _G.ActiveStateCached = v
+                    print("[AutomaHub] AutoVault: state cached OK ->", tostring(v))
                     break
                 end
             end
+        end
+        if not _G.ActiveStateCached then
+            warn("[AutomaHub] AutoVault: state NOT found in GC! Auto Vault won't work.")
         end
     end
 
@@ -839,7 +845,7 @@ do
         local isVaulting = scr and scr:GetAttribute("isVaulting") or false
         if isVaulting then lastVaultTime = os.clock() end
         if vaultPoint and not isVaulting and (os.clock() - lastVaultTime > vaultCooldown) then
-            Actions.startVault(state, vaultPoint)
+            rawStartVault(state, vaultPoint)
         end
     end)
 end
