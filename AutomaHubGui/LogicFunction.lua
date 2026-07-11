@@ -1,12 +1,10 @@
 --!strict
 
 -- Services
-local Players          = game:GetService("Players")
+local Players           = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
-local CollectionService = game:GetService("CollectionService")
 local RunService        = game:GetService("RunService")
 local UserInputService  = game:GetService("UserInputService")
-local Teams             = game:GetService("Teams")
 local Workspace         = game:GetService("Workspace")
 
 local LocalPlayer = Players.LocalPlayer
@@ -21,18 +19,15 @@ pcall(function()
 end)
 
 -- =====================================================================
--- COMBAT MODULE (Auto Dodge Abyss)
+-- COMBAT MODULE (Anti Auto Parry)
 -- =====================================================================
 
 local Character = LocalPlayer.Character or LocalPlayer.CharacterAdded:Wait()
 local Humanoid  = Character:WaitForChild("Humanoid")
 local RootPart  = Character:WaitForChild("HumanoidRootPart")
 
-local Remotes = ReplicatedStorage:WaitForChild("Remotes")
-
-local KillerTeam = Teams:FindFirstChild("Killer")
-
-
+local antiAutoParryEnabled = false
+local loadAntiParryTrack
 
 LocalPlayer.CharacterAdded:Connect(function(newChar)
     Character = newChar
@@ -42,20 +37,6 @@ LocalPlayer.CharacterAdded:Connect(function(newChar)
         task.spawn(loadAntiParryTrack, newChar)
     end
 end)
-
--- State Toggles & Distances
-
-
-
-
-local antiAutoParryEnabled = false
-local loadAntiParryTrack
-
-
-
-
-
-
 
 -- =====================================================================
 -- AUTO SKILLCHECK MODULE
