@@ -6,19 +6,9 @@ getgenv().AutomaHubLoaderModule = true
 
 local function fetchScript(path: string): any
     local content
-    if _G.AutomaHubDeveloperMode and typeof(isfile) == "function" and typeof(readfile) == "function" then
-        if isfile(path) then
-            pcall(function() content = readfile(path) end)
-        elseif isfile("AutomaHub/" .. path) then
-            pcall(function() content = readfile("AutomaHub/" .. path) end)
-        end
-    end
-
-    if not content then
-        local ok, res = pcall(game.HttpGet, game, baseUrl .. path .. "?t=" .. tostring(tick()))
-        if ok and res and not res:find("Too Many Requests") and not res:find("429") and not res:find("Not Found") and not res:find("404") then
-            content = res
-        end
+    local ok, res = pcall(game.HttpGet, game, baseUrl .. path .. "?t=" .. tostring(tick()))
+    if ok and res and not res:find("Too Many Requests") and not res:find("429") and not res:find("Not Found") and not res:find("404") then
+        content = res
     end
 
     -- ponytail: live proxy fallback (raw.githack) to bypass jsdelivr's 12-24h cache when GitHub returns 429
