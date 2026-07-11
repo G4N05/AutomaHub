@@ -760,9 +760,8 @@ do
     local Actions = require(Survivors:WaitForChild("SurvivorActions"))
 
     -- 1. Hook Always Fast Vault (hanya sekali setup, guard by flag)
-    local oldIsFacing = AnimController._isFacingStraightEnough
-    AnimController._isFacingStraightEnough = function(self, ...)
-        if not fastVaultEnabled then return oldIsFacing(self, ...) end
+    AnimController._isFacingStraightEnough = function()
+        if not fastVaultEnabled then return AnimController._isFacingStraightEnough end
         return true, 0
     end
 
@@ -802,9 +801,9 @@ do
         task.wait(3)
         for _, v in ipairs(getgc(true)) do
             if type(v) == "table" then
-                local ok1, prox = pcall(function() return v.proximity end)
+                local ok1, prox    = pcall(function() return v.proximity end)
                 local ok2, cooldown = pcall(function() return v.startCooldown end)
-                local ok3, char = pcall(function() return v.character end)
+                local ok3, char    = pcall(function() return v.character end)
                 if ok1 and type(prox) == "table" and ok2 and type(cooldown) == "table" and ok3 and type(char) == "table" then
                     _G.ActiveStateCached = v
                     break
