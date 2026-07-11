@@ -59,39 +59,6 @@ local VisualTab = Window:Tab({ Title = "Visual", Icon = "eye" })
 local AimTab = Window:Tab({ Title = "Aim", Icon = "crosshair" })
 local AntiTab = Window:Tab({ Title = "Anti", Icon = "shield-alert" })
 
--- Combat Tab Sections (Tidied and organized)
-local ParrySection = CombatTab:Section({ Title = "Auto Parry Settings" })
-ParrySection:Toggle({
-    Title = "Auto Parry",
-    Desc = "Automatically parry killer attacks",
-    Value = false,
-    Callback = function(value: boolean)
-        if Combat and Combat.SetAutoParry then
-            Combat.SetAutoParry(value)
-        end
-    end
-})
-
-ParrySection:Slider({
-    Title = "Parry Distance",
-    Value = { Min = 5, Max = 25, Default = 9 },
-    Callback = function(value: number)
-        if Combat and Combat.SetParryDistance then
-            Combat.SetParryDistance(value)
-        end
-    end
-})
-
-ParrySection:Slider({
-    Title = "Dash Parry Distance",
-    Value = { Min = 20, Max = 50, Default = 30 },
-    Callback = function(value: number)
-        if Combat and Combat.SetDashParryDistance then
-            Combat.SetDashParryDistance(value)
-        end
-    end
-})
-
 local DodgeSection = CombatTab:Section({ Title = "Auto Dodge Settings" })
 DodgeSection:Toggle({
     Title = "Auto Dodge (Abysswalker)",
@@ -156,17 +123,6 @@ VaultSection:Toggle({
     Callback = function(value: boolean)
         if Combat and Combat.SetFastVault then
             Combat.SetFastVault(value)
-        end
-    end
-})
-
-VaultSection:Toggle({
-    Title = "Auto Vault",
-    Desc = "Automatically vault when near a vault point",
-    Value = false,
-    Callback = function(value: boolean)
-        if Combat and Combat.SetAutoVault then
-            Combat.SetAutoVault(value)
         end
     end
 })
@@ -285,65 +241,6 @@ AimSection:Slider({
     Callback = function(value: number)
         if Aim and Aim.SetSmooth then
             Aim.SetSmooth(value)
-        end
-    end
-})
-
--- Aim Veil Settings
-local AimVeilSection = AimTab:Section({ Title = "Aim Veil Settings" })
-
-AimVeilSection:Dropdown({
-    Title = "Aim Veil",
-    Desc = "Select Aim Veil mode",
-    Values = { "Disabled", "Silent Aim", "Aim Lock", "Both" },
-    Value = "Both",
-    Callback = function(value: string)
-        if Aim then
-            if value == "Disabled" then
-                Aim.SetVeilSilentAim(false)
-                Aim.SetVeilAimLock(false)
-            elseif value == "Silent Aim" then
-                Aim.SetVeilSilentAim(true)
-                Aim.SetVeilAimLock(false)
-            elseif value == "Aim Lock" then
-                Aim.SetVeilSilentAim(false)
-                Aim.SetVeilAimLock(true)
-            elseif value == "Both" then
-                Aim.SetVeilSilentAim(true)
-                Aim.SetVeilAimLock(true)
-            end
-        end
-    end
-})
-
-AimVeilSection:Toggle({
-    Title = "Show FOV (Veil)",
-    Desc = "Show FOV circle for Veil",
-    Value = false,
-    Callback = function(value: boolean)
-        if Aim and Aim.SetVeilShowFov then
-            Aim.SetVeilShowFov(value)
-        end
-    end
-})
-
-AimVeilSection:Slider({
-    Title = "FOV Radius (Veil)",
-    Value = { Min = 50, Max = 400, Default = 150 },
-    Callback = function(value: number)
-        if Aim and Aim.SetVeilFovRadius then
-            Aim.SetVeilFovRadius(value)
-        end
-    end
-})
-
-AimVeilSection:Toggle({
-    Title = "Predict Movement (Veil)",
-    Desc = "Predict target movement trajectory for Veil",
-    Value = true,
-    Callback = function(value: boolean)
-        if Aim and Aim.SetVeilEnableLead then
-            Aim.SetVeilEnableLead(value)
         end
     end
 })

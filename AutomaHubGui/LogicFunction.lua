@@ -21,7 +21,7 @@ pcall(function()
 end)
 
 -- =====================================================================
--- COMBAT MODULE (Auto Parry, Dash Parry, Auto Dodge Abyss)
+-- COMBAT MODULE (Auto Dodge Abyss)
 -- =====================================================================
 
 local Character = LocalPlayer.Character or LocalPlayer.CharacterAdded:Wait()
@@ -29,9 +29,7 @@ local Humanoid  = Character:WaitForChild("Humanoid")
 local RootPart  = Character:WaitForChild("HumanoidRootPart")
 
 local Remotes = ReplicatedStorage:WaitForChild("Remotes")
-local parryResult = Remotes:WaitForChild("Items"):WaitForChild("Parrying Dagger"):WaitForChild("parryResult")
-local DamagevizEvent = Remotes:WaitForChild("Killers"):WaitForChild("Damageviz")
-local SlowAttack = Remotes:WaitForChild("Killers"):FindFirstChild("SlowAttack")
+
 local KillerTeam = Teams:FindFirstChild("Killer")
 
 local killerDistance = 999
@@ -48,9 +46,7 @@ LocalPlayer.CharacterAdded:Connect(function(newChar)
 end)
 
 -- State Toggles & Distances
-local autoParryEnabled = false
-local parryDistance = 9
-local dashDistance = 30
+
 
 local autoDodgeEnabled = false
 local dodgeDistance = 25
@@ -63,7 +59,7 @@ local loadAntiParryTrack
 
 -- Optimized Heartbeat for Killer Tracking (Only runs when Combat features are active)
 RunService.Heartbeat:Connect(function()
-    if not autoParryEnabled and not autoDodgeEnabled then return end
+    if not autoDodgeEnabled then return end
     if not RootPart or not RootPart.Parent then return end
     
     local nearest = 9999
@@ -92,32 +88,7 @@ RunService.Heartbeat:Connect(function()
     killerDistance = nearest
     killerRoot = nearestRoot
 
-    -- ponytail: check if the nearest killer is currently attacking or holding a lunge while we are in range
-    if autoParryEnabled and nearestRoot and nearest <= parryDistance then
-        local kChar = nearestRoot.Parent
-        local hum = kChar and kChar:FindFirstChildOfClass("Humanoid")
-        local animator = hum and hum:FindFirstChildOfClass("Animator")
-        if animator then
-            local isAttacking = false
-            for _, track in ipairs(animator:GetPlayingAnimationTracks()) do
-                local id = track.Animation and track.Animation.AnimationId
-                local animId = id and tostring(id):match("%d+") or ""
-                local trackName = tostring(track.Name):lower()
-                if ATTACK_ANIM_IDS[animId] 
-                   or animId == "139369275981139" 
-                   or trackName:find("attack") 
-                   or trackName:find("lunge") 
-                   or trackName:find("swing") 
-                   or trackName:find("slash") then
-                    isAttacking = true
-                    break
-                end
-            end
-            if isAttacking then
-                attemptParry(parryDistance)
-            end
-        end
-    end
+
 end)
 
 -- Optimized RaycastParams instance (reused to prevent GC overhead)
@@ -170,8 +141,7 @@ local function hookKillerAnimators()
     end
 end
 
--- Auto Parry Mechanics
-local isOnCooldown, isResolving, isSilenced, isAutoParrying = false, false, false, false
+
 local ATTACK_ANIM_IDS: { [string]: boolean } = {
     ["117042998468241"] = true, ["129784271201071"] = true, ["113255068724446"] = true,
     ["118907603246885"] = true, ["122812055447896"] = true, ["110355011987939"] = true,
@@ -179,177 +149,7 @@ local ATTACK_ANIM_IDS: { [string]: boolean } = {
     ["115244153053858"] = true, ["106871536134254"] = true,
     ["139369275981139"] = true, -- Slasher basic attack
 }
-local lastPrePress, rearmCooldown, postParryCooldown, lastAutoPress = 0, 0.08, 0.25, 0
-local facingDotThreshold = 0.1
 
-local function canParry(): boolean
-    if isOnCooldown or isSilenced or LocalPlayer:GetAttribute("IsDead") then return false end
-    if not Character or not Character.Parent or Character:GetAttribute("IsCarried") or Character:GetAttribute("IsHooked") then return false end
-    if CollectionService:HasTag(RootPart, "doing action") then return false end
-    return true
-end
-
-local function cleanupStaleActionTag()
-    if not RootPart or not RootPart.Parent then return end
-    if CollectionService:HasTag(RootPart, "doing action") then
-        local checkInt = Character and Character:FindFirstChild("CheckInterractable")
-        if not checkInt or not checkInt:GetAttribute("isRepairing") then
-            CollectionService:RemoveTag(RootPart, "doing action")
-            if RootPart.Anchored then RootPart.Anchored = false end
-            isResolving, isOnCooldown = false, false
-        end
-    end
-end
-
-local function isKillerFacing(): boolean
-    if not killerRoot or not killerRoot.Parent or not RootPart or not RootPart.Parent then return true end
-    local dot = killerRoot.CFrame.LookVector:Dot((RootPart.Position - killerRoot.Position).Unit)
-    return dot >= facingDotThreshold
-end
-
-local parryController: any = nil
-local function resolveParryController(): any
-    if parryController then return parryController end
-    -- Match instance by its exact class metatable (ParryClient), same as the
-    -- working standalone script. The old loose duck-typing scan grabbed the
-    -- first table with .Parry/.CanUse (usually the class module/prototype),
-    -- so :Parry() ran without instance state and silently did nothing.
-    local ok, ParryClient = pcall(function()
-        return require(ReplicatedStorage.Modules.Items.ParryClient)
-    end)
-    if not ok or not ParryClient then return nil end
-    if type(getgc) ~= "function" then return nil end
-
-    for _, v in ipairs(getgc(true)) do
-        if type(v) == "table" and getmetatable(v) == ParryClient then
-            parryController = v
-            break
-        end
-    end
-
-    return parryController
-end
-
-local function doParryPress()
-    isAutoParrying = true
-    lastAutoPress = os.clock()
-    lastPrePress = os.clock()
-    local ctrl = resolveParryController()
-    if ctrl then
-        local ok, err = pcall(function()
-            if ctrl:CanUse() then ctrl:Parry() end
-        end)
-        if not ok then parryController = nil end
-    end
-    task.delay(0.05, function() isAutoParrying = false end)
-end
-
-local function attemptParry(maxRange: number)
-    if not autoParryEnabled then return end
-    if killerDistance > maxRange then return end
-    if not canParry() then return end
-    if (os.clock() - lastPrePress) < rearmCooldown then return end
-    if not hasLineOfSight() then return end
-    if not isKillerFacing() then return end
-    
-    doParryPress()
-end
-
-local function triggerParry()
-    attemptParry(parryDistance)
-end
-
-DamagevizEvent.OnClientEvent:Connect(triggerParry)
-if SlowAttack then SlowAttack.OnClientEvent:Connect(triggerParry) end
-
-onKillerAnim(function(plr, idRaw, animId, track)
-    local trackName = track and tostring(track.Name):lower() or ""
-    if ATTACK_ANIM_IDS[animId] 
-       or animId == "139369275981139"
-       or trackName:find("attack") 
-       or trackName:find("lunge") 
-       or trackName:find("swing") 
-       or trackName:find("slash") then
-        triggerParry()
-    end
-end)
-
-parryResult.OnClientEvent:Connect(function(success, cd)
-    isResolving = false
-    if success then
-        isOnCooldown = true
-        task.delay(postParryCooldown, function() isOnCooldown = false end)
-    end
-end)
-
-UserInputService.InputBegan:Connect(function(input, gp)
-    if not gp and input.UserInputType == Enum.UserInputType.MouseButton2 then
-        if isAutoParrying or (os.clock() - lastAutoPress) < 0.2 then return end
-        if canParry() then isResolving = true end
-    end
-end)
-
-CollectionService:GetInstanceAddedSignal("Silenced"):Connect(function(i) if i == Character then isSilenced = true end end)
-CollectionService:GetInstanceRemovedSignal("Silenced"):Connect(function(i) if i == Character then isSilenced = false end end)
-LocalPlayer.CharacterAdded:Connect(function() isOnCooldown, isResolving, isSilenced, parryController = false, false, false, nil end)
-
-if KillerTeam then
-    hookKillerAnimators()
-    KillerTeam.PlayerAdded:Connect(hookKillerAnimators)
-    KillerTeam.PlayerRemoved:Connect(hookKillerAnimators)
-end
-
-RunService.Heartbeat:Connect(function()
-    if autoParryEnabled and RootPart and CollectionService:HasTag(RootPart, "doing action") then
-        cleanupStaleActionTag()
-    end
-end)
-
--- Dash Parry (Hidden)
-local DASH_WINDUP_ID = "98163597193511"
-local dashParryDelay = 0.775
-local dashFacingDotMin = math.cos(math.rad(10))
-local dashRetriggerGuard = 1.4
-local dashPending = false
-local lastDashSchedule = -999
-
-local function dashFacingInfo(kr: BasePart?): (number, boolean)
-    if not kr or not kr.Parent or not RootPart or not RootPart.Parent then return 999, false end
-    local toPlayer = RootPart.Position - kr.Position
-    local dist = toPlayer.Magnitude
-    if dist < 0.01 then return dist, true end
-    local dot = math.clamp(kr.CFrame.LookVector:Dot(toPlayer.Unit), -1, 1)
-    return dist, (dot >= dashFacingDotMin)
-end
-
-local function fireDashParry(getKr: () -> BasePart?)
-    dashPending = false
-    if not autoParryEnabled then return end
-    local kr = getKr()
-    local dist, facingOk = dashFacingInfo(kr)
-    if dist > dashDistance or not facingOk then return end
-    if not canParry() or not hasLineOfSight() then return end
-    doParryPress()
-end
-
-local function scheduleDashParry(plr: Player, kr: BasePart?)
-    if not autoParryEnabled or dashPending or (os.clock() - lastDashSchedule) < dashRetriggerGuard then return end
-    local dist, facingOk = dashFacingInfo(kr)
-    if dist > dashDistance or not facingOk then return end
-    dashPending = true
-    lastDashSchedule = os.clock()
-    task.delay(dashParryDelay, function()
-        fireDashParry(function()
-            return plr.Character and (plr.Character:FindFirstChild("HumanoidRootPart") :: BasePart?)
-        end)
-    end)
-end
-
-onKillerAnim(function(plr, idRaw, animId)
-    if idRaw and tostring(idRaw):find(DASH_WINDUP_ID) then
-        scheduleDashParry(plr, plr.Character and (plr.Character:FindFirstChild("HumanoidRootPart") :: BasePart?))
-    end
-end)
 
 -- Auto Dodge Abysswalker
 local crouchHoldTime = 1.0
@@ -747,13 +547,12 @@ end)
 
 
 -- =====================================================================
--- VAULT MODULE (Fast Vault + Auto Vault)
+-- VAULT MODULE (Fast Vault)
 -- =====================================================================
 local fastVaultEnabled = false
-local autoVaultEnabled = false
 
 do
-    -- ponytail: match-lifecycle optimized fast & auto vault (0% lag)
+    -- ponytail: match-lifecycle optimized fast vault (0% lag)
     local Survivors = ReplicatedStorage:WaitForChild("Modules"):WaitForChild("Survivors")
 
     local AnimController = require(Survivors:WaitForChild("SurvivorAnimationsController"))
@@ -793,54 +592,7 @@ do
         if not ok then error(err) end
     end
 
-    -- 2. Caching State (hanya sekali saat spawn)
-    _G.ActiveStateCached = nil
 
-    local function cacheState()
-        _G.ActiveStateCached = nil
-        task.wait(3)
-        for _, v in ipairs(getgc(true)) do
-            if type(v) == "table" then
-                local ok1, prox    = pcall(function() return v.proximity end)
-                local ok2, cooldown = pcall(function() return v.startCooldown end)
-                local ok3, char    = pcall(function() return v.character end)
-                if ok1 and type(prox) == "table" and ok2 and type(cooldown) == "table" and ok3 and type(char) == "table" then
-                    _G.ActiveStateCached = v
-                    break
-                end
-            end
-        end
-    end
-
-    if _G.AutoVaultCharConn then _G.AutoVaultCharConn:Disconnect() end
-    _G.AutoVaultCharConn = LocalPlayer.CharacterAdded:Connect(function()
-        task.spawn(cacheState)
-    end)
-    task.spawn(cacheState)
-
-    -- 3. Auto Vault Heartbeat (tanpa getgc setiap frame)
-    if _G.AutoVaultConnection then
-        _G.AutoVaultConnection:Disconnect()
-        _G.AutoVaultConnection = nil
-    end
-
-    local lastVaultTime = 0
-    local vaultCooldown = 0.3
-
-    _G.AutoVaultConnection = RunService.Heartbeat:Connect(function()
-        if not autoVaultEnabled then return end
-        local state = _G.ActiveStateCached
-        if not state or not state.proximity then return end
-        local proxState = state.proximity.state
-        local vaultPoint = proxState and proxState.vaultPoint
-        local char = LocalPlayer.Character
-        local scr = char and char:FindFirstChild("CheckInterractable")
-        local isVaulting = scr and scr:GetAttribute("isVaulting") or false
-        if isVaulting then lastVaultTime = os.clock() end
-        if vaultPoint and not isVaulting and (os.clock() - lastVaultTime > vaultCooldown) then
-            Actions.startVault(state, vaultPoint)
-        end
-    end)
 end
 
 
@@ -1298,25 +1050,12 @@ local AIM_CONFIG = {
     aimSmooth       = 0.25,
     aimShowFov      = false,     -- POV circle (visual). set true kalau mau
 
-    -- Aim Veil
-    veilSilentAim   = true,      -- silent aim spear (remote Spearthrow)
-    veilAimLock     = true,      -- kamera lock ballistic pas throw stance
-    veilEnableLead  = true,
-    veilFovRadius   = 150,
-    veilShowFov     = false,     -- POV circle (visual). set true kalau mau
+
 }
 
 local Logic = {
     Combat = {
-        SetAutoParry = function(enabled: boolean)
-            autoParryEnabled = enabled
-        end,
-        SetParryDistance = function(dist: number)
-            parryDistance = dist
-        end,
-        SetDashParryDistance = function(dist: number)
-            dashDistance = dist
-        end,
+
         SetAutoDodgeAbyss = function(enabled: boolean)
             autoDodgeEnabled = enabled
         end,
@@ -1337,9 +1076,6 @@ local Logic = {
         end,
         SetFastVault = function(enabled: boolean)
             fastVaultEnabled = enabled
-        end,
-        SetAutoVault = function(enabled: boolean)
-            autoVaultEnabled = enabled
         end
     },
     ESP = ESP,
@@ -1373,22 +1109,7 @@ local Logic = {
             AIM_CONFIG.aimLeadMult = value
         end,
 
-        -- Aim Veil Setters
-        SetVeilSilentAim = function(value: boolean)
-            AIM_CONFIG.veilSilentAim = value
-        end,
-        SetVeilAimLock = function(value: boolean)
-            AIM_CONFIG.veilAimLock = value
-        end,
-        SetVeilEnableLead = function(value: boolean)
-            AIM_CONFIG.veilEnableLead = value
-        end,
-        SetVeilFovRadius = function(value: number)
-            AIM_CONFIG.veilFovRadius = value
-        end,
-        SetVeilShowFov = function(value: boolean)
-            AIM_CONFIG.veilShowFov = value
-        end,
+
     }
 }
 
@@ -1575,180 +1296,13 @@ local function initTwistOfFate()
     end
 end
 
--- ============================================================
--- MODULE 2: Veil (Silent Aim + Aim Lock ballistic)
--- ============================================================
-local function initVeil()
-    local veilFovFollowMouse = false
-    local VEIL_TARGET_PART = "HumanoidRootPart"
-    local VEIL_GRAVITY = 98.1
-    local VEIL_AIM_SMOOTH = 0.35
-    local VEIL_AIM_LOCK_SPEED = 165
 
-    -- ponytail: single combined aim prediction offsets as requested (10-40 -> 1.8, 40-70 -> 2.2)
-    local function veilOffsetForDist(dist)
-        if dist >= 10 and dist <= 40 then
-            return 1.8
-        elseif dist > 40 and dist <= 70 then
-            return 2.2
-        end
-        return 1.0
-    end
-
-    local veilTargetPos, veilTargetVel, veilTargetName = nil, nil, nil
-    local veilSampleName, veilSamplePos, veilSampleT = nil, nil, 0
-    local veilLockedPlayer = nil
-    local veilLockGraceUntil = 0
-
-    local function veilGetFovCenter() if veilFovFollowMouse then local m = UserInputService:GetMouseLocation() return Vector2.new(m.X, m.Y) end local vp = Workspace.CurrentCamera.ViewportSize return Vector2.new(vp.X/2, vp.Y/2) end
-    local function veilGetPart(plr) return plr and plr.Character and plr.Character:FindFirstChild(VEIL_TARGET_PART) end
-
-    local function veilInRange(origin, targetPos, speed, g)
-        local disp = targetPos - origin
-        local dy = disp.Y
-        local flatX, flatZ = disp.X, disp.Z
-        local dx = math.sqrt(flatX * flatX + flatZ * flatZ)
-        if dx < 0.001 then return true end
-        local v2 = speed * speed
-        local root = v2 * v2 - g * (g * dx * dx + 2 * dy * v2)
-        return root >= 0
-    end
-
-    local function veilGetTarget()
-        local team = Teams:FindFirstChild("Survivors") if not team then return nil end
-        local cam = Workspace.CurrentCamera local origin = cam.CFrame.Position local center = veilGetFovCenter()
-        local best, bestDist = nil, AIM_CONFIG.veilFovRadius
-        for _, plr in ipairs(team:GetPlayers()) do
-            if plr ~= LocalPlayer then
-                local part = veilGetPart(plr)
-                if part then
-                    local sp, onScreen = cam:WorldToViewportPoint(part.Position)
-                    if onScreen then
-                        local d = (Vector2.new(sp.X, sp.Y) - center).Magnitude
-                        if d <= bestDist and veilInRange(origin, part.Position, VEIL_AIM_LOCK_SPEED, VEIL_GRAVITY) then best, bestDist = plr, d end
-                    end
-                end
-            end
-        end
-        return best
-    end
-
-    local function veilSolveBallistic(origin, target, speed, g)
-        local disp = target - origin
-        local dy = disp.Y
-        local flatX, flatZ = disp.X, disp.Z
-        local dx = math.sqrt(flatX * flatX + flatZ * flatZ)
-        if dx < 0.001 then return (disp.Magnitude > 0) and disp.Unit or nil, 0 end
-        local v2 = speed * speed
-        local root = v2 * v2 - g * (g * dx * dx + 2 * dy * v2)
-        local tanTheta
-        if root < 0 then tanTheta = 1 else local sq = math.sqrt(root) tanTheta = (v2 - sq) / (g * dx) end
-        local horiz = Vector3.new(flatX / dx, 0, flatZ / dx)
-        local dir = (horiz + Vector3.new(0, tanTheta, 0))
-        if dir.Magnitude < 0.001 then return nil end
-        dir = dir.Unit
-        local cosTheta = math.sqrt(dir.X * dir.X + dir.Z * dir.Z)
-        local tof = (speed * cosTheta > 0.001) and (dx / (speed * cosTheta)) or 0
-        return dir, tof
-    end
-
-    local function veilSolveLead(origin, targetPos, targetVel, speed, g)
-        local pred = targetPos
-        local dist = (targetPos - origin).Magnitude
-        local applyLead = AIM_CONFIG.veilEnableLead and targetVel
-        local mult = applyLead and veilOffsetForDist(dist) or 0
-        local dir, tof
-        for _ = 1, 3 do
-            dir, tof = veilSolveBallistic(origin, pred, speed, g)
-            if not dir then return nil end
-            if applyLead then pred = targetPos + targetVel * (tof * mult) end
-        end
-        return dir, tof
-    end
-
-    local veilFovCircle = nil
-    if Drawing then
-        veilFovCircle = Drawing.new("Circle")
-        veilFovCircle.Thickness = 2 veilFovCircle.NumSides = 64 veilFovCircle.Radius = AIM_CONFIG.veilFovRadius
-        veilFovCircle.Filled = false veilFovCircle.Visible = false veilFovCircle.Color = Color3.fromRGB(255, 255, 255)
-    end
-
-    local veilRenderConn = RunService.RenderStepped:Connect(function()
-        if not (AIM_CONFIG.veilSilentAim or AIM_CONFIG.veilAimLock) then
-            veilTargetPos, veilTargetVel, veilTargetName = nil, nil, nil
-            veilSampleName = nil veilLockedPlayer = nil
-            if veilFovCircle then veilFovCircle.Visible = false end
-            return
-        end
-        if veilFovCircle then veilFovCircle.Visible = AIM_CONFIG.veilShowFov veilFovCircle.Radius = AIM_CONFIG.veilFovRadius veilFovCircle.Position = veilGetFovCenter() end
-        local stanceChar = LocalPlayer.Character
-        local inThrowStance = stanceChar and stanceChar:GetAttribute("spearmode") == true
-        local holding = inThrowStance == true
-        local target
-        if holding then
-            if not veilLockedPlayer then veilLockedPlayer = veilGetTarget() end
-            if not (veilLockedPlayer and veilLockedPlayer.Parent and veilGetPart(veilLockedPlayer)) then veilLockedPlayer = veilGetTarget() end
-            target = veilLockedPlayer
-            veilLockGraceUntil = tick() + 0.3
-        elseif veilLockedPlayer and tick() < veilLockGraceUntil and veilLockedPlayer.Parent and veilGetPart(veilLockedPlayer) then
-            target = veilLockedPlayer
-        else
-            veilLockedPlayer = nil
-            target = veilGetTarget()
-        end
-        if target then
-            local part = veilGetPart(target)
-            if part then
-                local pos = part.Position local now = tick()
-                if veilSampleName == target.Name and veilSamplePos then
-                    local dt = now - veilSampleT
-                    if dt >= 0.04 then
-                        local instVel = (pos - veilSamplePos) / dt
-                        veilTargetVel = veilTargetVel and veilTargetVel:Lerp(instVel, 0.5) or instVel
-                        veilSamplePos = pos veilSampleT = now
-                    end
-                else veilSampleName = target.Name veilSamplePos = pos veilSampleT = now veilTargetVel = Vector3.zero end
-                veilTargetPos = pos veilTargetName = target.Name
-                if veilFovCircle then veilFovCircle.Color = Color3.fromRGB(255, 0, 0) end
-                if AIM_CONFIG.veilAimLock and holding then
-                    local cam = Workspace.CurrentCamera local origin = cam.CFrame.Position
-                    local dir = veilSolveLead(origin, pos, veilTargetVel, VEIL_AIM_LOCK_SPEED, VEIL_GRAVITY)
-                    if dir then local goal = CFrame.new(origin, origin + dir) cam.CFrame = cam.CFrame:Lerp(goal, VEIL_AIM_SMOOTH) end
-                end
-            else veilTargetPos, veilTargetVel = nil, nil veilSampleName = nil if veilFovCircle then veilFovCircle.Color = Color3.fromRGB(255, 255, 255) end end
-        else veilTargetPos, veilTargetVel = nil, nil veilSampleName = nil if veilFovCircle then veilFovCircle.Color = Color3.fromRGB(255, 255, 255) end end
-    end)
-
-    onNamecall(function(self, method, ...)
-        if method == "FireServer" and AIM_CONFIG.veilSilentAim and veilTargetPos and self.Name == "Spearthrow" then
-            local p = self.Parent
-            if p and p.Name == "Veil" then
-                local args = { ... }
-                local dirArg, speedArg, originArg = args[1], args[2], args[3]
-                if typeof(dirArg) == "Vector3" and type(speedArg) == "number" and typeof(originArg) == "Vector3" then
-                    local newDir = veilSolveLead(originArg, veilTargetPos, veilTargetVel, speedArg, VEIL_GRAVITY)
-                    if newDir then args[1] = newDir return true, callOriginal(self, unpack(args)) end
-                end
-            end
-        end
-        return false
-    end)
-
-    if getgenv then
-        local g = getgenv()
-        if g.__tomaVeilRender then pcall(function() g.__tomaVeilRender:Disconnect() end) end
-        g.__tomaVeilRender = veilRenderConn
-        if g.__tomaVeilFov then pcall(function() g.__tomaVeilFov:Remove() end) end
-        g.__tomaVeilFov = veilFovCircle
-    end
-end
 
 -- ==================== INIT ========================
 initTwistOfFate()
-initVeil()
 installNamecallHook()
 
-print("[Aim Hub] Pistol & Veil script loaded. Silent aim supported: " .. tostring(silentSupported))
+print("[Aim Hub] Pistol script loaded. Silent aim supported: " .. tostring(silentSupported))
 
 getgenv().AutomaHubLogic = Logic
 return Logic
