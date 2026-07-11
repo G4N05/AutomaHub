@@ -3,6 +3,7 @@
 -- Services
 local Players           = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local CollectionService = game:GetService("CollectionService")
 local RunService        = game:GetService("RunService")
 local UserInputService  = game:GetService("UserInputService")
 local Workspace         = game:GetService("Workspace")
@@ -37,6 +38,85 @@ LocalPlayer.CharacterAdded:Connect(function(newChar)
         task.spawn(loadAntiParryTrack, newChar)
     end
 end)
+
+-- =====================================================================
+-- AUTO DROP PALLET MODULE
+-- =====================================================================
+local autoPalletEnabled: boolean = false
+local TRIGGER_DISTANCE: number = 13.2
+local PLAYER_INTERACT_DISTANCE: number = 6 
+
+local droppedDebounce: { [Instance]: boolean } = {}
+local Remotes = ReplicatedStorage:WaitForChild("Remotes")
+local PalletDropEvent = Remotes:WaitForChild("Pallet"):WaitForChild("PalletDropEvent") :: any
+
+local keybindConnection: RBXScriptConnection
+keybindConnection = UserInputService.InputBegan:Connect(function(input: InputObject, gpe: boolean)
+    if gpe then return end
+    if input.KeyCode == Enum.KeyCode.J then
+        TRIGGER_DISTANCE = math.round((TRIGGER_DISTANCE + 0.1) * 10) / 10
+        print("AutoPallet Jarak Trigger Bertambah:", TRIGGER_DISTANCE)
+    elseif input.KeyCode == Enum.KeyCode.K then
+        TRIGGER_DISTANCE = math.max(0.1, math.round((TRIGGER_DISTANCE - 0.1) * 10) / 10)
+        print("AutoPallet Jarak Trigger Berkurang:", TRIGGER_DISTANCE)
+    end
+end)
+
+local function getKillerCharacter(): Model?
+    for _, p in ipairs(Players:GetPlayers()) do
+        if p.Team and p.Team.Name == "Killer" then
+            return p.Character
+        end
+    end
+    return nil
+end
+
+local connection: RBXScriptConnection
+connection = RunService.Heartbeat:Connect(function()
+    if not autoPalletEnabled then return end
+    local char = LocalPlayer.Character
+    local hrp = char and char:FindFirstChild("HumanoidRootPart") :: BasePart?
+    local hum = char and char:FindFirstChildOfClass("Humanoid") :: Humanoid?
+    if not hrp or not hum or hum.Health <= 50 then return end
+    
+    if hrp:HasTag("doing action") or hrp:HasTag("carried") or char:GetAttribute("carried") then
+        return
+    end
+    
+    local killerChar = getKillerCharacter()
+    local killerHrp = killerChar and killerChar:FindFirstChild("HumanoidRootPart") :: BasePart?
+    if not killerHrp then return end
+    
+    local palletPoints = CollectionService:GetTagged("PalletPoint")
+    for _, palletPoint in ipairs(palletPoints) do
+        if palletPoint:IsA("BasePart") and not droppedDebounce[palletPoint] then
+            local distToPlayer = (palletPoint.Position - hrp.Position).Magnitude
+            if distToPlayer <= PLAYER_INTERACT_DISTANCE then
+                local distToKiller = (palletPoint.Position - killerHrp.Position).Magnitude
+                
+                if distToKiller <= TRIGGER_DISTANCE then
+                    droppedDebounce[palletPoint] = true
+                    pcall(function()
+                        PalletDropEvent:FireServer(palletPoint)
+                    end)
+                    task.delay(5, function()
+                        droppedDebounce[palletPoint] = nil
+                    end)
+                end
+            end
+        end
+    end
+end)
+
+if _G.AutoPalletConnection then
+    pcall(function() (_G.AutoPalletConnection :: any):Disconnect() end)
+end
+if _G.AutoPalletKeybindConnection then
+    pcall(function() (_G.AutoPalletKeybindConnection :: any):Disconnect() end)
+end
+
+_G.AutoPalletConnection = connection
+_G.AutoPalletKeybindConnection = keybindConnection
 
 -- =====================================================================
 -- AUTO SKILLCHECK MODULE
@@ -770,6 +850,12 @@ local Logic = {
 
         SetAutoSkillcheck = function(enabled: boolean)
             autoSkillcheckEnabled = enabled
+        end,
+        SetAutoPallet = function(enabled: boolean)
+            autoPalletEnabled = enabled
+        end,
+        SetPalletDistance = function(dist: number)
+            TRIGGER_DISTANCE = dist
         end,
         SetAntiAutoParry = function(enabled: boolean)
             antiAutoParryEnabled = enabled
