@@ -20,13 +20,6 @@ local function fetchScript(path: string): any
         end
     end
     if not content then
-        local githackUrl = "https://raw.githack.com/G4N05/AutomaHub/main/"
-        local ok, res = pcall(game.HttpGet, game, githackUrl .. path .. "?t=" .. tostring(tick()))
-        if ok and res and not res:find("Too Many Requests") and not res:find("429") then
-            content = res
-        end
-    end
-    if not content then
         local cdnUrl = "https://cdn.jsdelivr.net/gh/G4N05/AutomaHub@main/"
         local ok, res = pcall(game.HttpGet, game, cdnUrl .. path .. "?t=" .. tostring(tick()))
         if ok and res then
@@ -34,7 +27,7 @@ local function fetchScript(path: string): any
         end
     end
     if not content then
-        error("Failed to fetch script: " .. path .. " (local, GitHub, GitHack, and CDN all failed)")
+        error("Failed to fetch script: " .. path .. " (local, GitHub, and CDN all failed)")
     end
     local func, err = loadstring(content)
     if not func then

@@ -36,17 +36,8 @@ local Logic = (function()
         end
     end
     
-    local ok3, githackContent = pcall(game.HttpGet, game, "https://raw.githack.com/G4N05/AutomaHub/main/AutomaHubGui/LogicFunction.lua?t=" .. tostring(tick()))
-    if ok3 and not githackContent:find("Too Many Requests") and not githackContent:find("429") then
-        local loader, err = loadstring(githackContent)
-        if loader then
-            local success, module = pcall(loader)
-            if success and module then return module end
-        end
-    end
-    
-    local ok4, cdnContent = pcall(game.HttpGet, game, "https://cdn.jsdelivr.net/gh/G4N05/AutomaHub@main/AutomaHubGui/LogicFunction.lua?t=" .. tostring(tick()))
-    if ok4 then
+    local ok3, cdnContent = pcall(game.HttpGet, game, "https://cdn.jsdelivr.net/gh/G4N05/AutomaHub@main/AutomaHubGui/LogicFunction.lua?t=" .. tostring(tick()))
+    if ok3 then
         local loader, err = loadstring(cdnContent)
         if loader then
             local success, module = pcall(loader)
@@ -67,28 +58,6 @@ local CombatTab = Window:Tab({ Title = "Combat", Icon = "swords" })
 local VisualTab = Window:Tab({ Title = "Visual", Icon = "eye" })
 local AimTab = Window:Tab({ Title = "Aim", Icon = "crosshair" })
 local AntiTab = Window:Tab({ Title = "Anti", Icon = "shield-alert" })
-
-local PalletSection = CombatTab:Section({ Title = "Auto Drop Pallete Settings" })
-PalletSection:Toggle({
-    Title = "Auto Drop Pallete",
-    Desc = "Automatically drop nearby pallets when killer is close",
-    Value = false,
-    Callback = function(value: boolean)
-        if Combat and Combat.SetAutoPallet then
-            Combat.SetAutoPallet(value)
-        end
-    end
-})
-
-PalletSection:Slider({
-    Title = "Trigger Distance",
-    Value = { Min = 5.0, Max = 25.0, Default = 13.2, Step = 0.1 },
-    Callback = function(value: number)
-        if Combat and Combat.SetPalletDistance then
-            Combat.SetPalletDistance(value)
-        end
-    end
-})
 
 local SkillcheckSection = CombatTab:Section({ Title = "Skillcheck Settings" })
 SkillcheckSection:Toggle({

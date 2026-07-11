@@ -1,15 +1,5 @@
 --!strict
 
--- Clean up any existing WindUI/AutomaHub ScreenGuis to prevent duplicate/stale menus on re-execution
-pcall(function()
-    local parent = (gethui and gethui()) or game:GetService("CoreGui") or game:GetService("Players").LocalPlayer:WaitForChild("PlayerGui")
-    for _, child in ipairs(parent:GetChildren()) do
-        if child:IsA("ScreenGui") and (child.Name == "WindUI" or child:FindFirstChild("Main") or child:FindFirstChild("AutomaHub")) then
-            child:Destroy()
-        end
-    end
-end)
-
 local WindUI = loadstring(game:HttpGet("https://raw.githubusercontent.com/Footagesus/WindUI/main/dist/main.lua"))() :: any
 getgenv().WindUI = WindUI
 
