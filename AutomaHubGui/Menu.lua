@@ -18,6 +18,7 @@ local Workspace         = game:GetService("Workspace")
 local Teams             = game:GetService("Teams")
 local HttpService       = game:GetService("HttpService")
 local VirtualInputManager = game:GetService("VirtualInputManager")
+local CollectionService = game:GetService("CollectionService")
 
 local LocalPlayer = Players.LocalPlayer
 
@@ -91,6 +92,61 @@ RunService.Heartbeat:Connect(function()
         scTriggered = true
         lastHitRotation = goalRotation
         task.spawn(simulateInput)
+    end
+end)
+
+-- =====================================================================
+-- AUTO DROP PALLET
+-- =====================================================================
+local autoPalletEnabled = false
+local palletTriggerDistance = 13.2
+local PLAYER_INTERACT_DISTANCE = 6
+local palletDroppedDebounce: { [Instance]: boolean } = {}
+
+local function getKillerCharacter()
+    for _, p in ipairs(Players:GetPlayers()) do
+        if p.Team and p.Team.Name == "Killer" then
+            return p.Character
+        end
+    end
+    return nil
+end
+
+RunService.Heartbeat:Connect(function()
+    if not autoPalletEnabled then return end
+    local char = LocalPlayer.Character
+    local hrp = char and char:FindFirstChild("HumanoidRootPart") :: BasePart?
+    local hum = char and char:FindFirstChildOfClass("Humanoid") :: Humanoid?
+    if not hrp or not hum or hum.Health <= 50 then return end
+    
+    if hrp:HasTag("doing action") or hrp:HasTag("carried") or char:GetAttribute("carried") then
+        return
+    end
+    
+    local killerChar = getKillerCharacter()
+    local killerHrp = killerChar and killerChar:FindFirstChild("HumanoidRootPart") :: BasePart?
+    if not killerHrp then return end
+    
+    local PalletDropEvent = ReplicatedStorage:FindFirstChild("Remotes") 
+        and ReplicatedStorage.Remotes:FindFirstChild("Pallet") 
+        and ReplicatedStorage.Remotes.Pallet:FindFirstChild("PalletDropEvent")
+    if not PalletDropEvent then return end
+    
+    local palletPoints = CollectionService:GetTagged("PalletPoint")
+    for _, palletPoint in ipairs(palletPoints) do
+        if palletPoint:IsA("BasePart") and not palletDroppedDebounce[palletPoint] then
+            local distToPlayer = (palletPoint.Position - hrp.Position).Magnitude
+            if distToPlayer <= PLAYER_INTERACT_DISTANCE then
+                local distToKiller = (palletPoint.Position - killerHrp.Position).Magnitude
+                if distToKiller <= palletTriggerDistance then
+                    palletDroppedDebounce[palletPoint] = true
+                    ;(PalletDropEvent :: RemoteEvent):FireServer(palletPoint)
+                    task.delay(5, function()
+                        palletDroppedDebounce[palletPoint] = nil
+                    end)
+                end
+            end
+        end
     end
 end)
 
@@ -755,6 +811,22 @@ CombatTab:Section({ Title = "Skillcheck Settings" }):Toggle({
     Desc = "Automatically hit perfect skillchecks",
     Value = false,
     Callback = function(value: boolean) autoSkillcheckEnabled = value end
+})
+
+-- Combat – Auto Pallet
+local PalletSection = CombatTab:Section({ Title = "Auto Drop Pallet" })
+PalletSection:Toggle({
+    Title = "Auto Drop Pallet",
+    Desc = "Automatically drop pallets when killer is close",
+    Value = false,
+    Callback = function(value: boolean) autoPalletEnabled = value end
+})
+PalletSection:Slider({
+    Title = "Trigger Distance",
+    Value = { Min = 5.0, Max = 25.0, Default = 13.2 },
+    Callback = function(value: number)
+        palletTriggerDistance = math.round(value * 10) / 10
+    end
 })
 
 -- Combat – Vault
