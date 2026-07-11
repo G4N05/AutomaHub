@@ -49,18 +49,6 @@ local droppedDebounce: { [Instance]: boolean } = {}
 
 local PalletDropEvent = ReplicatedStorage:WaitForChild("Remotes"):WaitForChild("Pallet"):WaitForChild("PalletDropEvent")
 
-local autoPalletKeybindConnection: RBXScriptConnection?
-autoPalletKeybindConnection = UserInputService.InputBegan:Connect(function(input, gpe)
-    if gpe or not autoPalletEnabled then return end
-    if input.KeyCode == Enum.KeyCode.J then
-        TRIGGER_DISTANCE = math.round((TRIGGER_DISTANCE + 0.1) * 10) / 10
-        print("AutoPallet Jarak Trigger Bertambah:", TRIGGER_DISTANCE)
-    elseif input.KeyCode == Enum.KeyCode.K then
-        TRIGGER_DISTANCE = math.max(0.1, math.round((TRIGGER_DISTANCE - 0.1) * 10) / 10)
-        print("AutoPallet Jarak Trigger Berkurang:", TRIGGER_DISTANCE)
-    end
-end)
-
 local function getKillerCharacter(): Model?
     for _, p in ipairs(Players:GetPlayers()) do
         if p.Team and p.Team.Name == "Killer" then
@@ -110,12 +98,8 @@ end)
 if _G.AutoPalletConnection then
     pcall(function() _G.AutoPalletConnection:Disconnect() end)
 end
-if _G.AutoPalletKeybindConnection then
-    pcall(function() _G.AutoPalletKeybindConnection:Disconnect() end)
-end
 
 _G.AutoPalletConnection = autoPalletConnection
-_G.AutoPalletKeybindConnection = autoPalletKeybindConnection
 print("Auto Pallet Drop Script updated with default 13.2 studs distance!")
 
 -- =====================================================================
