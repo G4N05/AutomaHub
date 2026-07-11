@@ -3,28 +3,11 @@
 local WindUI = loadstring(game:HttpGet("https://raw.githubusercontent.com/Footagesus/WindUI/main/dist/main.lua"))() :: any
 getgenv().WindUI = WindUI
 
--- Get logo asset ID (works on all platforms)
-local LOGO_ASSET_ID = "rbxassetid://89249705975584"
-local asset = LOGO_ASSET_ID
-if (getcustomasset or getsynasset) and writefile then
-    local logoPath = "AutomaHub/Icon/logo.jpg"
-    if isfile and not isfile(logoPath) then
-        pcall(makefolder, "AutomaHub")
-        pcall(makefolder, "AutomaHub/Icon")
-        local ok, content = pcall(game.HttpGet, game, "https://raw.githubusercontent.com/G4N05/AutomaHub/main/Icon/logo.jpg")
-        if ok and content then pcall(writefile, logoPath, content) end
-    end
-    if isfile and isfile(logoPath) then
-        local ok, res = pcall((getcustomasset or getsynasset), logoPath)
-        if ok and res then asset = res end
-    end
-end
-
 local Window = WindUI:CreateWindow({
     Title = "AutomaHub",
     Author = "by G4N05",
     Folder = "AutomaHub",
-    Icon = asset,
+    Icon = "rbxassetid://89249705975584",
     Theme = "Crimson",
     Size = UDim2.fromOffset(580, 460),
     NewElements = true,
