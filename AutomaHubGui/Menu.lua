@@ -18,6 +18,7 @@ local Workspace         = game:GetService("Workspace")
 local Teams             = game:GetService("Teams")
 local HttpService       = game:GetService("HttpService")
 local VirtualInputManager = game:GetService("VirtualInputManager")
+local CollectionService = game:GetService("CollectionService")
 
 local LocalPlayer = Players.LocalPlayer
 
@@ -138,6 +139,69 @@ do
         if not ok then error(err) end
     end
 end
+
+-- =====================================================================
+-- AUTO DROP PALLET
+-- =====================================================================
+local autoDropPalletEnabled = false
+local TRIGGER_DISTANCE = 13.2
+local PLAYER_INTERACT_DISTANCE = 6
+local droppedDebounce: { [Instance]: boolean } = {}
+
+local function getKillerCharacter(): Model?
+    for _, p in ipairs(Players:GetPlayers()) do
+        if p.Team and p.Team.Name == "Killer" then
+            return p.Character
+        end
+    end
+    return nil
+end
+
+local PalletDropEvent: RemoteEvent? = nil
+task.spawn(function()
+    pcall(function()
+        local remotes = ReplicatedStorage:WaitForChild("Remotes", 5)
+        local pallet = remotes and remotes:WaitForChild("Pallet", 5)
+        PalletDropEvent = pallet and pallet:WaitForChild("PalletDropEvent", 5) :: RemoteEvent?
+    end)
+end)
+
+RunService.Heartbeat:Connect(function()
+    if not autoDropPalletEnabled then return end
+    
+    local char = LocalPlayer.Character
+    local hrp = char and char:FindFirstChild("HumanoidRootPart")
+    local hum = char and char:FindFirstChildOfClass("Humanoid") :: Humanoid?
+    if not hrp or not hum or hum.Health <= 50 then return end
+    
+    if hrp:HasTag("doing action") or hrp:HasTag("carried") or char:GetAttribute("carried") then
+        return
+    end
+    
+    local killerChar = getKillerCharacter()
+    local killerHrp = killerChar and killerChar:FindFirstChild("HumanoidRootPart")
+    if not killerHrp then return end
+    
+    local palletPoints = CollectionService:GetTagged("PalletPoint")
+    for _, palletPoint in ipairs(palletPoints) do
+        if palletPoint:IsA("BasePart") and not droppedDebounce[palletPoint] then
+            local distToPlayer = (palletPoint.Position - hrp.Position).Magnitude
+            if distToPlayer <= PLAYER_INTERACT_DISTANCE then
+                local distToKiller = (palletPoint.Position - killerHrp.Position).Magnitude
+                
+                if distToKiller <= TRIGGER_DISTANCE then
+                    if PalletDropEvent then
+                        droppedDebounce[palletPoint] = true
+                        PalletDropEvent:FireServer(palletPoint)
+                        task.delay(5, function()
+                            droppedDebounce[palletPoint] = nil
+                        end)
+                    end
+                end
+            end
+        end
+    end
+end)
 
 -- =====================================================================
 -- ANTI AUTO PARRY
@@ -755,6 +819,22 @@ CombatTab:Section({ Title = "Skillcheck Settings" }):Toggle({
     Desc = "Automatically hit perfect skillchecks",
     Value = false,
     Callback = function(value: boolean) autoSkillcheckEnabled = value end
+})
+
+-- Combat – Auto Drop Pallet
+local PalletSection = CombatTab:Section({ Title = "Auto Drop Pallet Settings" })
+PalletSection:Toggle({
+    Title = "Auto Drop Pallet",
+    Desc = "Automatically drop pallets when the killer is within trigger range",
+    Value = false,
+    Callback = function(value: boolean) autoDropPalletEnabled = value end
+})
+PalletSection:Slider({
+    Title = "Trigger Distance",
+    Value = { Min = 5, Max = 25, Default = 13.2 },
+    Callback = function(value: number)
+        TRIGGER_DISTANCE = math.floor(value * 10 + 0.5) / 10
+    end
 })
 
 -- Combat – Vault
