@@ -798,13 +798,13 @@ do
 
     local function cacheState()
         _G.ActiveStateCached = nil
-        task.wait(3)
+        task.wait(2)
         for _, v in ipairs(getgc(true)) do
             if type(v) == "table" then
-                local ok1, prox    = pcall(function() return v.proximity end)
-                local ok2, cooldown = pcall(function() return v.startCooldown end)
-                local ok3, char    = pcall(function() return v.character end)
-                if ok1 and type(prox) == "table" and ok2 and type(cooldown) == "table" and ok3 and type(char) == "table" then
+                local ok1, prox    = pcall(function() return rawget(v, "proximity") end)
+                local ok2, cooldown = pcall(function() return rawget(v, "startCooldown") end)
+                local ok3, char    = pcall(function() return rawget(v, "character") end)
+                if ok1 and type(prox) == "table" and ok2 and cooldown ~= nil and ok3 and char ~= nil then
                     _G.ActiveStateCached = v
                     break
                 end
